@@ -56,10 +56,19 @@ INPUT = setmetatable({ upRecent = { } }, {
 -- swallow a final key-repeat glyph arriving just after keyup.
 INPUT_UP_GRACE = 1
 
--- Reserved chords fire once per physical press: dispatch does
--- not gate on isrepeat, so a held combo would repeat its action
--- every frame. suppress_repeat consumes either way, so a repeat
--- never falls through to the scene.
+-- Every reserved chord here is consumed and fires once per
+-- physical press. suppress_repeat covers the repeat half: it
+-- swallows a held combo's repeats, which dispatch does not gate
+-- on, and consumes what it swallows. Consuming the FRESH press
+-- is the handler's own business, which is what `return true`
+-- below is -- none of these actions falls through to the scene.
+local function chord(fn)
+  return compy.input.suppress_repeat(function()
+    fn()
+    return true
+  end)
+end
+
 --
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
 -- never reaching the scene as a typed target. alt+p is an exact
@@ -74,12 +83,11 @@ function inputInit()
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
   local sc = compy.input.shortcuts.keypressed
-  local once = compy.input.suppress_repeat
-  sc["shift+escape"] = once(goBack)
-  sc["ctrl+alt+up"] = once(function() notchAdjust(1) end)
-  sc["ctrl+alt+down"] = once(function() notchAdjust(-1) end)
-  sc["alt+*"] = once(function() end)
-  sc["alt+p"] = once(pauseToggle)
+  sc["shift+escape"] = chord(goBack)
+  sc["ctrl+alt+up"] = chord(function() notchAdjust(1) end)
+  sc["ctrl+alt+down"] = chord(function() notchAdjust(-1) end)
+  sc["alt+*"] = chord(function() end)
+  sc["alt+p"] = chord(pauseToggle)
 end
 
 function modHeld(a, b)
