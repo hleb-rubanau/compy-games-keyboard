@@ -58,33 +58,31 @@ INPUT_UP_GRACE = 1
 
 -- The app's reserved keys, none of which reaches the scene.
 --
--- `claim` (always_true) is what says a combo is taken, so the
--- action itself does not have to know what happens after it
--- returns. `once` (suppress_repeat) is needed on top of it
--- wherever there IS an action, because claim alone re-runs the
--- action on every OS repeat: a held ctrl+alt+up would ramp
--- the notch every frame.
+-- stop_here is what says a combo is taken, so the action itself
+-- does not have to know what happens after it returns.
+-- ignore_repeat goes inside it wherever there IS an action,
+-- because stop_here alone re-runs the action on every OS repeat:
+-- a held ctrl+alt+up would ramp the notch every frame.
 --
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
--- never reaching the scene as a typed target. It is `claim()`
--- with nothing to run, so there is no repeat to suppress.
+-- never reaching the scene as a typed target. It is stop_here()
+-- with nothing to run, so there is no repeat to ignore.
 -- alt+p is an exact binding and exact wins over the class.
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
 -- a different class -- which is the "and not Ctrl" test this
 -- file used to write out by hand before combo classes existed.
 local function register_reserved()
-  local once = compy.input.suppress_repeat
-  local claim = compy.input.always_true
+  local fn = compy.input.fn
   local sc = compy.input.shortcuts.keypressed
-  sc["shift+escape"] = once(claim(goBack))
-  sc["ctrl+alt+up"] = once(claim(function()
+  sc["shift+escape"] = fn.stop_here(fn.ignore_repeat(goBack))
+  sc["ctrl+alt+up"] = fn.stop_here(fn.ignore_repeat(function()
     notchAdjust(1)
   end))
-  sc["ctrl+alt+down"] = once(claim(function()
+  sc["ctrl+alt+down"] = fn.stop_here(fn.ignore_repeat(function()
     notchAdjust(-1)
   end))
-  sc["alt+*"] = claim()
-  sc["alt+p"] = once(claim(pauseToggle))
+  sc["alt+*"] = fn.stop_here()
+  sc["alt+p"] = fn.stop_here(fn.ignore_repeat(pauseToggle))
 end
 
 function inputInit()
