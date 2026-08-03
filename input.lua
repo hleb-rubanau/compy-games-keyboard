@@ -56,38 +56,44 @@ INPUT = setmetatable({ upRecent = { } }, {
 -- swallow a final key-repeat glyph arriving just after keyup.
 INPUT_UP_GRACE = 1
 
--- A reserved binding: fires once per physical press, and never
--- falls through to the scene. Two platform wrappers composed:
--- suppress_repeat swallows a held combo's repeats, which
--- dispatch does not gate on, and always_true says this combo is
--- claimed -- so the action itself need not know that.
-local function reserved(fn)
-  local input = compy.input
-  return input.suppress_repeat(input.always_true(fn))
+-- The app's reserved keys, none of which reaches the scene.
+--
+-- `claim` (always_true) is what says a combo is taken, so the
+-- action itself does not have to know what happens after it
+-- returns. `once` (suppress_repeat) is needed on top of it
+-- wherever there IS an action, because claim alone re-runs the
+-- action on every OS repeat: a held ctrl+alt+up would ramp
+-- the notch every frame.
+--
+-- "alt+*" is the whole Alt class: every Alt chord is swallowed,
+-- never reaching the scene as a typed target. It is `claim()`
+-- with nothing to run, so there is no repeat to suppress.
+-- alt+p is an exact binding and exact wins over the class.
+-- Ctrl+Alt+H is NOT in the class -- a different modifier set is
+-- a different class -- which is the "and not Ctrl" test this
+-- file used to write out by hand before combo classes existed.
+local function register_reserved()
+  local once = compy.input.suppress_repeat
+  local claim = compy.input.always_true
+  local sc = compy.input.shortcuts.keypressed
+  sc["shift+escape"] = once(claim(goBack))
+  sc["ctrl+alt+up"] = once(claim(function()
+    notchAdjust(1)
+  end))
+  sc["ctrl+alt+down"] = once(claim(function()
+    notchAdjust(-1)
+  end))
+  sc["alt+*"] = claim()
+  sc["alt+p"] = once(claim(pauseToggle))
 end
 
--- "alt+*" is the whole Alt class: every Alt chord is swallowed,
--- never reaching the scene as a typed target. alt+p is an exact
--- binding, and exact wins over the class. Ctrl+Alt+H is
--- NOT in the class -- a different modifier set is a different
--- class -- which is the "and not Ctrl" test this file used to
--- write out by hand before combo classes existed.
 function inputInit()
   love.keyboard.setTextInput(true)
   INPUT.upRecent = { }
   compy.input.hooks.keypressed = appKeypressed
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
-  local sc = compy.input.shortcuts.keypressed
-  sc["shift+escape"] = reserved(goBack)
-  sc["ctrl+alt+up"] = reserved(function()
-    notchAdjust(1)
-  end)
-  sc["ctrl+alt+down"] = reserved(function()
-    notchAdjust(-1)
-  end)
-  sc["alt+*"] = reserved()
-  sc["alt+p"] = reserved(pauseToggle)
+  register_reserved()
 end
 
 function modHeld(a, b)
