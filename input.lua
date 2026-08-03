@@ -61,8 +61,8 @@ INPUT_UP_GRACE = 1
 -- stop_here is what says a combo is taken, so the action itself
 -- does not have to know what happens after it returns.
 -- ignore_repeat goes inside it wherever there IS an action,
--- because stop_here alone re-runs the action on every OS repeat:
--- a held ctrl+alt+up would ramp the notch every frame.
+-- because stop_here alone re-runs the action on every OS
+-- repeat: a held ctrl+alt+up would ramp the notch every frame.
 --
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
 -- never reaching the scene as a typed target. It is stop_here()
