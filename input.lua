@@ -56,17 +56,14 @@ INPUT = setmetatable({ upRecent = { } }, {
 -- swallow a final key-repeat glyph arriving just after keyup.
 INPUT_UP_GRACE = 1
 
--- Every reserved chord here is consumed and fires once per
--- physical press. suppress_repeat covers the repeat half: it
--- swallows a held combo's repeats, which dispatch does not gate
--- on, and consumes what it swallows. Consuming the FRESH press
--- is the handler's own business, which is what `return true`
--- below is -- none of these actions falls through to the scene.
-local function chord(fn)
-  return compy.input.suppress_repeat(function()
-    fn()
-    return true
-  end)
+-- A reserved binding: fires once per physical press, and never
+-- falls through to the scene. Two platform wrappers composed:
+-- suppress_repeat swallows a held combo's repeats, which
+-- dispatch does not gate on, and always_true says this combo is
+-- claimed -- so the action itself need not know that.
+local function reserved(fn)
+  local input = compy.input
+  return input.suppress_repeat(input.always_true(fn))
 end
 
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
@@ -74,7 +71,7 @@ end
 -- binding, and exact wins over the class. Ctrl+Alt+H is
 -- NOT in the class -- a different modifier set is a different
 -- class -- which is the "and not Ctrl" test this file used to
--- write out by hand in appChord.
+-- write out by hand before combo classes existed.
 function inputInit()
   love.keyboard.setTextInput(true)
   INPUT.upRecent = { }
@@ -82,11 +79,15 @@ function inputInit()
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
   local sc = compy.input.shortcuts.keypressed
-  sc["shift+escape"] = chord(goBack)
-  sc["ctrl+alt+up"] = chord(function() notchAdjust(1) end)
-  sc["ctrl+alt+down"] = chord(function() notchAdjust(-1) end)
-  sc["alt+*"] = chord(function() end)
-  sc["alt+p"] = chord(pauseToggle)
+  sc["shift+escape"] = reserved(goBack)
+  sc["ctrl+alt+up"] = reserved(function()
+    notchAdjust(1)
+  end)
+  sc["ctrl+alt+down"] = reserved(function()
+    notchAdjust(-1)
+  end)
+  sc["alt+*"] = reserved()
+  sc["alt+p"] = reserved(pauseToggle)
 end
 
 function modHeld(a, b)
