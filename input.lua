@@ -69,7 +69,6 @@ local function chord(fn)
   end)
 end
 
---
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
 -- never reaching the scene as a typed target. alt+p is an exact
 -- binding, and exact wins over the class. Ctrl+Alt+H is
