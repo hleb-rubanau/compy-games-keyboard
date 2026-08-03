@@ -1,8 +1,8 @@
 -- keyboard: the program a 4-6 year-old launches to meet the
 -- keyboard. One program: a typewriter intro, a mini-game menu,
--- and the mini-games. main.lua defines the LOVE callbacks once
--- and dispatches to the active scene after reserved-chord
--- handling; scenes are loaded once here at boot.
+-- and the mini-games. main.lua defines update/draw and loads
+-- the scenes once here at boot; the keyboard/text callbacks are
+-- compy.input hooks and shortcuts, registered in input.lua.
 
 gfx = love.graphics
 
@@ -131,14 +131,8 @@ function love.draw()
   DREW_ONCE = true
 end
 
-function love.keypressed(k)
-  appKeypressed(k)
-end
-
-function love.keyreleased(k)
-  appKeyreleased(k)
-end
-
-function love.textinput(t)
-  appTextinput(t)
-end
+-- Keyboard/text handlers are registered as compy.input.hooks in
+-- inputInit (input.lua), not as love.* globals: the framework
+-- captures love.* into the same hooks, so the explicit form
+-- only drops three wrappers that existed to satisfy LOVE's
+-- naming convention.

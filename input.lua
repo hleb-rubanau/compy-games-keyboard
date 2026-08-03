@@ -1,13 +1,19 @@
 -- Input lifecycle and event model.
 --
--- The IDE keeps key-repeat enabled and strips the isrepeat flag
--- before calling the game, so repeats are filtered here by
--- edge tracking: a key already in INPUT.held is a repeat and is
--- ignored completely. The game does NOT disable global
--- key-repeat (the runner exposes no project-exit cleanup hook
--- to restore it on Ctrl+Esc force-exit; see Beads
--- compy-keyboard-exit-hook). Text input is enabled to match
--- the IDE default (restoring it on exit is a no-op).
+-- This game runs on the Compy input API (doc/input_api.md). It
+-- registers compy.input.hooks.* rather than love.* handlers --
+-- the framework would capture love.* and run them as hooks
+-- anyway, so the explicit form just says what is happening --
+-- and its reserved chords are compy.input.shortcuts entries,
+-- which run ahead of the hooks.
+--
+-- Key repeat is filtered by the isrepeat flag the API delivers
+-- as the third hook argument. Text input is enabled to match
+-- the IDE default (restoring it on exit is a no-op). The game
+-- does NOT disable global key-repeat: it now COULD restore it,
+-- since compy.before_exit fires on every stop path including
+-- Ctrl+Esc, but the repeats are filtered rather than suppressed
+-- and turning them off would change what the scenes see.
 --
 -- Ordering: the IDE delivers textinput BEFORE the matching
 -- keypress (the reverse of desktop LOVE). So a "fresh keypress
@@ -18,36 +24,65 @@
 -- is swallowed in appChord (the keypress) AND its glyph dropped
 -- in appTextinput (a chord glyph CAN surface and is never a
 -- target), so a chord cannot fumble a target. A held key emits
--- textinput; since textinput precedes the fresh keypress, the
--- producing key is in INPUT.held when a repeat arrives, so the
--- scene drops it. The release boundary still leaks, though: a
--- final key-repeat glyph can arrive just after its keyup, so a
--- key is "stale" for a frame after release (INPUT.upRecent);
--- inputStale() drops input for a held OR just-released key.
+-- textinput, and textinput has no isrepeat flag of its own, so
+-- the glyph is judged by whether its producing key is HELD --
+-- which is what compy.input.keys_pressed answers. The release
+-- boundary still leaks: a final key-repeat glyph can arrive
+-- just after its keyup, so a key stays "stale" for a frame
+-- after release (INPUT.upRecent, ours -- the framework drops a
+-- key from the held set at the gateway, before dispatch).
 --
--- Held modifier edges are the source of truth for
--- modifier-dependent acceptance and for Caps reconciliation.
+-- Held modifier state is read live from
+-- compy.input.keys_pressed through the INPUT proxy below. It
+-- used to be a mirror this file maintained on every press and
+-- release; the API exposes the set outside an event now
+-- (Decision 20), which is what the key-cap renderer needs --
+-- it reads INPUT.shift from draw, where there is no event
+-- argument to consult.
 
-INPUT = {
-  held = { }, upRecent = { },
-  shift = false, ctrl = false, alt = false
-}
+-- Reads pass through to the framework's held set. `held` is
+-- that set; `shift`/`ctrl`/`alt` fold the l/r pair, which the
+-- raw set deliberately does not. Only `upRecent` is ours.
+INPUT = setmetatable({ upRecent = { } }, {
+  __index = function(_, k)
+    if k == "held" then return compy.input.keys_pressed end
+    if k == "shift" then return modHeld("lshift", "rshift") end
+    if k == "ctrl" then return modHeld("lctrl", "rctrl") end
+    if k == "alt" then return modHeld("lalt", "ralt") end
+  end,
+})
 
 -- A key stays "stale" this many frames after its release, to
 -- swallow a final key-repeat glyph arriving just after keyup.
 INPUT_UP_GRACE = 1
 
+-- A reserved chord fires once per physical press: shortcuts see
+-- the same isrepeat flag hooks do, and dispatch does not gate
+-- on it for them, so holding the combo would otherwise repeat
+-- the action every frame. Consumed either way, so a repeat
+-- never falls through to the scene.
+local function chord(fn)
+  return function(_, _, isr)
+    if not isr then fn() end
+    return true
+  end
+end
+
 function inputInit()
   love.keyboard.setTextInput(true)
-  INPUT.held = { }
   INPUT.upRecent = { }
-  INPUT.shift = false
-  INPUT.ctrl = false
-  INPUT.alt = false
+  compy.input.hooks.keypressed = appKeypressed
+  compy.input.hooks.keyreleased = appKeyreleased
+  compy.input.hooks.textinput = appTextinput
+  local sc = compy.input.shortcuts.keypressed
+  sc["shift+escape"] = chord(goBack)
+  sc["ctrl+alt+up"] = chord(function() notchAdjust(1) end)
+  sc["ctrl+alt+down"] = chord(function() notchAdjust(-1) end)
 end
 
 function modHeld(a, b)
-  if INPUT.held[a] or INPUT.held[b] then
+  local held = compy.input.keys_pressed
+  if held[a] or held[b] then
     return true
   end
   return false
@@ -57,12 +92,6 @@ function isMod(k)
   return k == "lshift" or k == "rshift"
     or k == "lctrl" or k == "rctrl"
     or k == "lalt" or k == "ralt"
-end
-
-function inputUpdateMods()
-  INPUT.shift = modHeld("lshift", "rshift")
-  INPUT.ctrl = modHeld("lctrl", "rctrl")
-  INPUT.alt = modHeld("lalt", "ralt")
 end
 
 function goBack()
@@ -76,29 +105,15 @@ function notchAdjust(delta)
   if s and s.onNotch then s.onNotch(delta) end
 end
 
--- Reserved chords are handled before scene input, keyed on the
--- non-modifier key so a held Shift during a letter falls
--- through to the scene.
-function reservedChord(k)
-  if k == "escape" and INPUT.shift and not INPUT.ctrl then
-    goBack()
-    return true
-  end
-  if INPUT.ctrl and INPUT.alt and k == "up" then
-    notchAdjust(1)
-    return true
-  end
-  if INPUT.ctrl and INPUT.alt and k == "down" then
-    notchAdjust(-1)
-    return true
-  end
-  return false
-end
-
 -- Alt+key (without Ctrl) is a chord, never a typed target, so
 -- swallow it here. Alt+P toggles the modal pause on a timed
 -- scene (a no-op elsewhere); Alt+H peeks help (via helpHeld).
 -- Ctrl+Alt+H stays unconsumed, for the scene's hint re-arm.
+--
+-- This one stays a hook, unlike the reserved chords in
+-- inputInit: it is a rule about a modifier CLASS ("every Alt+x
+-- is a chord"), and a combo table binds one combo at a time,
+-- with no wildcard.
 function appChord(k)
   if INPUT.ctrl then return false end
   if not INPUT.alt then return false end
@@ -106,9 +121,11 @@ function appChord(k)
   return true
 end
 
--- A key is "stale" (a repeat, not a fresh press) while held
--- or for INPUT_UP_GRACE frames after its release -- the latter
--- catches a final key-repeat glyph delivered just after keyup.
+-- Whether a TEXTINPUT glyph should be dropped: its producing
+-- key is still held (a repeat -- textinput has no isrepeat flag
+-- of its own), or was released within INPUT_UP_GRACE frames,
+-- which catches a final glyph trailing just after keyup.
+-- Keypresses do not use this: they have the real flag.
 function inputStale(k)
   if INPUT.held[k] then return true end
   local up = INPUT.upRecent[k]
@@ -116,16 +133,14 @@ function inputStale(k)
   return DBG_FRAME - up <= INPUT_UP_GRACE
 end
 
--- capslock is exempt from the stale filter (its release may not
--- arrive, wedging the set and freezing Caps). Scene input is
--- also dropped while the help overlay is up (the game is frozen
--- behind it).
-function appKeypressed(k)
-  if inputStale(k) and k ~= "capslock" then return end
+-- isr is the API's isrepeat (third hook argument): a held key
+-- is filtered at the source instead of inferred from the held
+-- set. capslock is exempt (its release may not arrive, wedging
+-- the set and freezing Caps). Scene input is also dropped while
+-- the help overlay is up (the game is frozen behind it).
+function appKeypressed(k, _, isr)
+  if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
-  INPUT.held[k] = true
-  inputUpdateMods()
-  if reservedChord(k) then return end
   if appChord(k) then return end
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
@@ -136,9 +151,7 @@ end
 
 function appKeyreleased(k)
   dbgLog("KR " .. k)
-  INPUT.held[k] = nil
   INPUT.upRecent[k] = DBG_FRAME
-  inputUpdateMods()
   local s = SCENES[ACTIVE]
   if s and s.keyreleased then s.keyreleased(k) end
 end
