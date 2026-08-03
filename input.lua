@@ -4,8 +4,8 @@
 -- registers compy.input.hooks.* rather than love.* handlers --
 -- the framework would capture love.* and run them as hooks
 -- anyway, so the explicit form just says what is happening --
--- and its reserved chords are compy.input.shortcuts entries,
--- which run ahead of the hooks.
+-- and its reserved chords and the whole Alt class are
+-- compy.input.shortcuts entries, which run ahead of the hooks.
 --
 -- Key repeat is filtered by the isrepeat flag the API delivers
 -- as the third hook argument. Text input is enabled to match
@@ -21,7 +21,7 @@
 -- the glyph arrives before anything arms it, and after a chord
 -- (which clears such a gate) the next target is dropped. So
 -- textinput is judged directly, with no gate. An Alt+key chord
--- is swallowed in appChord (the keypress) AND its glyph dropped
+-- is swallowed by the alt+* shortcut AND its glyph dropped
 -- in appTextinput (a chord glyph CAN surface and is never a
 -- target), so a chord cannot fumble a target. A held key emits
 -- textinput, and textinput has no isrepeat flag of its own, so
@@ -56,18 +56,17 @@ INPUT = setmetatable({ upRecent = { } }, {
 -- swallow a final key-repeat glyph arriving just after keyup.
 INPUT_UP_GRACE = 1
 
--- A reserved chord fires once per physical press: shortcuts see
--- the same isrepeat flag hooks do, and dispatch does not gate
--- on it for them, so holding the combo would otherwise repeat
--- the action every frame. Consumed either way, so a repeat
+-- Reserved chords fire once per physical press: dispatch does
+-- not gate on isrepeat, so a held combo would repeat its action
+-- every frame. suppress_repeat consumes either way, so a repeat
 -- never falls through to the scene.
-local function chord(fn)
-  return function(_, _, isr)
-    if not isr then fn() end
-    return true
-  end
-end
-
+--
+-- "alt+*" is the whole Alt class: every Alt chord is swallowed,
+-- never reaching the scene as a typed target. alt+p is an exact
+-- binding, and exact wins over the class. Ctrl+Alt+H is
+-- NOT in the class -- a different modifier set is a different
+-- class -- which is the "and not Ctrl" test this file used to
+-- write out by hand in appChord.
 function inputInit()
   love.keyboard.setTextInput(true)
   INPUT.upRecent = { }
@@ -75,9 +74,12 @@ function inputInit()
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
   local sc = compy.input.shortcuts.keypressed
-  sc["shift+escape"] = chord(goBack)
-  sc["ctrl+alt+up"] = chord(function() notchAdjust(1) end)
-  sc["ctrl+alt+down"] = chord(function() notchAdjust(-1) end)
+  local once = compy.input.suppress_repeat
+  sc["shift+escape"] = once(goBack)
+  sc["ctrl+alt+up"] = once(function() notchAdjust(1) end)
+  sc["ctrl+alt+down"] = once(function() notchAdjust(-1) end)
+  sc["alt+*"] = once(function() end)
+  sc["alt+p"] = once(pauseToggle)
 end
 
 function modHeld(a, b)
@@ -105,22 +107,6 @@ function notchAdjust(delta)
   if s and s.onNotch then s.onNotch(delta) end
 end
 
--- Alt+key (without Ctrl) is a chord, never a typed target, so
--- swallow it here. Alt+P toggles the modal pause on a timed
--- scene (a no-op elsewhere); Alt+H peeks help (via helpHeld).
--- Ctrl+Alt+H stays unconsumed, for the scene's hint re-arm.
---
--- This one stays a hook, unlike the reserved chords in
--- inputInit: it is a rule about a modifier CLASS ("every Alt+x
--- is a chord"), and a combo table binds one combo at a time,
--- with no wildcard.
-function appChord(k)
-  if INPUT.ctrl then return false end
-  if not INPUT.alt then return false end
-  if k == "p" then pauseToggle() end
-  return true
-end
-
 -- Whether a TEXTINPUT glyph should be dropped: its producing
 -- key is still held (a repeat -- textinput has no isrepeat flag
 -- of its own), or was released within INPUT_UP_GRACE frames,
@@ -141,7 +127,6 @@ end
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
-  if appChord(k) then return end
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
   if helpOverlayShown() then return end
