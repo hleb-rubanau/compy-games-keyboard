@@ -40,11 +40,13 @@
 -- it reads INPUT.shift from draw, where there is no event
 -- argument to consult.
 
+
 -- Reads pass through to the framework's held set. `held` is
 -- that set; `shift`/`ctrl`/`alt` fold the l/r pair, which the
 -- raw set deliberately does not. Only `upRecent` is ours.
 INPUT = setmetatable({ upRecent = { } }, {
   __index = function(_, k)
+    ---> REMARK: WHY WOULD WE DO IT AND WHY USE custom 'INPUT' at all?
     if k == "held" then return compy.input.keys_pressed end
     if k == "shift" then return modHeld("lshift", "rshift") end
     if k == "ctrl" then return modHeld("lctrl", "rctrl") end
@@ -86,6 +88,7 @@ local function register_reserved()
 end
 
 function inputInit()
+  --> REMARK: what is it for? (setTextInput)
   love.keyboard.setTextInput(true)
   INPUT.upRecent = { }
   compy.input.hooks.keypressed = appKeypressed
