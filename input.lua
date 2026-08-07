@@ -15,20 +15,27 @@
 -- Ctrl+Esc, but the repeats are filtered rather than suppressed
 -- and turning them off would change what the scenes see.
 --
--- Ordering: the IDE delivers textinput BEFORE the matching
--- keypress (the reverse of desktop LOVE). So a "fresh keypress
--- arms a gate, its textinput consumes it" scheme cannot work --
--- the glyph arrives before anything arms it, and after a chord
--- (which clears such a gate) the next target is dropped. So
--- textinput is judged directly, with no gate. An Alt+key chord
--- is swallowed by the alt+* shortcut AND its glyph dropped
--- in appTextinput (a chord glyph CAN surface and is never a
--- target), so a chord cannot fumble a target. A held key emits
--- textinput, and textinput has no isrepeat flag of its own, so
--- the glyph is judged by whether its producing key is HELD --
--- which is what compy.input.keys_pressed answers. The release
--- boundary still leaks: a final key-repeat glyph can arrive
--- just after its keyup, so a key stays "stale" for a frame
+-- Ordering: keypressed and textinput have NO fixed order
+-- between them (doc/development/internals/user_input.md, "Data
+-- flow"). The IDE delivers the glyph first; desktop LOVE
+-- delivers the keypress first. Nothing here may depend on
+-- which, and two schemes are ruled out by that:
+-- "a fresh keypress arms a gate, its textinput consumes it"
+-- fails wherever the glyph arrives first, and "drop the glyph
+-- if its key is HELD" fails wherever the keypress arrives
+-- first, because then the key is already held at its own first
+-- glyph and every fresh target is thrown away. The second is
+-- what this file used to do, and it is what made the Alt-keys
+-- scene deaf on the device while working in the IDE.
+-- So a glyph is CLAIMED instead: one per press, released at
+-- keyup (spendGlyph below). That question -- has this key's
+-- glyph been judged since its last release -- has the same
+-- answer in both orders.
+-- An Alt+key chord is swallowed by the alt+* shortcut AND its
+-- glyph dropped in appTextinput (a chord glyph CAN surface and
+-- is never a target), so a chord cannot fumble a target. The
+-- release boundary still leaks: a final key-repeat glyph can
+-- arrive just after its keyup, so a key stays spent for a frame
 -- after release (INPUT.upRecent, ours -- the framework drops a
 -- key from the held set at the gateway, before dispatch).
 --
@@ -91,6 +98,7 @@ function inputInit()
   --> REMARK: what is it for? (setTextInput)
   love.keyboard.setTextInput(true)
   INPUT.upRecent = { }
+  GLYPH_CLAIMED = { }
   compy.input.hooks.keypressed = appKeypressed
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
@@ -122,16 +130,33 @@ function notchAdjust(delta)
   if s and s.onNotch then s.onNotch(delta) end
 end
 
--- Whether a TEXTINPUT glyph should be dropped: its producing
--- key is still held (a repeat -- textinput has no isrepeat flag
--- of its own), or was released within INPUT_UP_GRACE frames,
--- which catches a final glyph trailing just after keyup.
--- Keypresses do not use this: they have the real flag.
-function inputStale(k)
-  if INPUT.held[k] then return true end
+-- One glyph per key press reaches a scene. textinput carries no
+-- isrepeat flag of its own, so a repeat has to be recognised
+-- some other way, and the held set cannot do it: whether
+-- keypressed or textinput arrives first is not fixed
+-- (doc/development/internals/user_input.md, "Data flow" -- no
+-- ordering guarantee between the two channels), so at a FRESH
+-- glyph the producing key is already held on one build and not
+-- yet held on another. Asking "is it held" therefore answers
+-- the environment, not the question.
+--
+-- Claiming answers the real one, the same way in both orders:
+-- has a glyph for this key already been judged since its last
+-- release. Claims are dropped on keyup (appKeyreleased), so the
+-- next press starts clean.
+GLYPH_CLAIMED = { }
+
+-- Claim this key's glyph for the current press. True means the
+-- caller must DROP it: either a glyph was already claimed (a
+-- key-repeat), or the key came up within INPUT_UP_GRACE frames
+-- and this is a final repeat trailing just after keyup.
+-- Keypresses do not use this: they have the real isrepeat flag.
+function spendGlyph(k)
+  if GLYPH_CLAIMED[k] then return true end
   local up = INPUT.upRecent[k]
-  if not up then return false end
-  return DBG_FRAME - up <= INPUT_UP_GRACE
+  if up and DBG_FRAME - up <= INPUT_UP_GRACE then return true end
+  GLYPH_CLAIMED[k] = true
+  return false
 end
 
 -- isr is the API's isrepeat (third hook argument): a held key
@@ -152,6 +177,7 @@ end
 function appKeyreleased(k)
   dbgLog("KR " .. k)
   INPUT.upRecent[k] = DBG_FRAME
+  GLYPH_CLAIMED[k] = nil
   local s = SCENES[ACTIVE]
   if s and s.keyreleased then s.keyreleased(k) end
 end

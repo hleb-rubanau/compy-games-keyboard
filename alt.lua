@@ -164,16 +164,13 @@ end
 -- glyph, however made. Non-printing targets ignore textinput
 -- (keypressed judges them).
 --
--- inputStale drops a glyph whose producing key is held or was
--- just released. A held key keeps emitting textinput (the IDE
--- sends textinput before the keypress, so a repeat's key is
--- already held); and a final key-repeat glyph can trail just
--- after the key's release. That stops a held wrong key knocking
--- each frame, a held right key bleeding a miss onto the next
--- target, and a chord key's trailing glyph (e.g. after Alt+H)
--- fumbling the live target.
+-- spendGlyph claims one glyph per press and drops the rest: a
+-- key-repeat, or a final glyph trailing just after keyup. That
+-- stops a held wrong key knocking each frame, a held right key
+-- bleeding a miss onto the next target, and a chord key's
+-- trailing glyph (e.g. after Alt+H) fumbling the live target.
 function altTextinput(ch)
-  if inputStale(altBaseKey(ch)) then return end
+  if spendGlyph(altBaseKey(ch)) then return end
   if fkDone(ALT) then return end
   if not gaugeGlowing(ALT) then return end
   if altIsKeyTarget(gaugeCurrent(ALT)) then return end
