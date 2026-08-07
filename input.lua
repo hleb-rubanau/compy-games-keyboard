@@ -139,7 +139,7 @@ end
 -- set. capslock is exempt (its release may not arrive, wedging
 -- the set and freezing Caps). Scene input is also dropped while
 -- the help overlay is up (the game is frozen behind it).
-function appKeypressed(k, isr)
+function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
   if k == "capslock" then capsToggle() end
