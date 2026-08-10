@@ -36,28 +36,29 @@
 -- is never a target), so a chord cannot fumble a target. The
 -- release boundary still leaks: a final key-repeat glyph can
 -- arrive just after its keyup, so a key stays spent for a frame
--- after release (INPUT.upRecent, ours -- the framework drops a
--- key from the held set at the gateway, before dispatch).
+-- after release (INPUT.upRecent, ours -- the keyboard reports
+-- the key up the moment it is released, so nothing else marks
+-- it recently spent).
 --
--- Held modifier state is read live from
--- compy.input.keys_pressed through the INPUT proxy below. It
--- used to be a mirror this file maintained on every press and
--- release; the API exposes the set outside an event now
--- (Decision 20), which is what the key-cap renderer needs --
--- it reads INPUT.shift from draw, where there is no event
--- argument to consult.
+-- Held modifier state is asked of the keyboard through the
+-- INPUT proxy below, which folds the l/r pairs via Key. It used
+-- to be a mirror this file maintained on every press and
+-- release, and then a read of a set the framework tracked; the
+-- framework tracks nothing now (Decision 30) and the device is
+-- the answer outside an event -- which is what the key-cap
+-- renderer needs, since it reads INPUT.shift from draw, where
+-- there is no event argument to consult.
 
 
--- Reads pass through to the framework's held set. `held` is
--- that set; `shift`/`ctrl`/`alt` fold the l/r pair, which the
--- raw set deliberately does not. Only `upRecent` is ours.
+-- Reads ask Key, which folds each l/r modifier pair the way a
+-- combo string does (doc/input_api.md, "Held keys"). Only
+-- `upRecent` is ours.
 INPUT = setmetatable({ upRecent = { } }, {
   __index = function(_, k)
     ---> REMARK: WHY WOULD WE DO IT AND WHY USE custom 'INPUT' at all?
-    if k == "held" then return compy.input.keys_pressed end
-    if k == "shift" then return modHeld("lshift", "rshift") end
-    if k == "ctrl" then return modHeld("lctrl", "rctrl") end
-    if k == "alt" then return modHeld("lalt", "ralt") end
+    if k == "shift" then return Key.shift() end
+    if k == "ctrl" then return Key.ctrl() end
+    if k == "alt" then return Key.alt() end
   end,
 })
 
@@ -103,14 +104,6 @@ function inputInit()
   compy.input.hooks.keyreleased = appKeyreleased
   compy.input.hooks.textinput = appTextinput
   register_reserved()
-end
-
-function modHeld(a, b)
-  local held = compy.input.keys_pressed
-  if held[a] or held[b] then
-    return true
-  end
-  return false
 end
 
 function isMod(k)
@@ -160,10 +153,14 @@ function spendGlyph(k)
 end
 
 -- isr is the API's isrepeat (third hook argument): a held key
--- is filtered at the source instead of inferred from the held
--- set. capslock is exempt (its release may not arrive, wedging
--- the set and freezing Caps). Scene input is also dropped while
--- the help overlay is up (the game is frozen behind it).
+-- is filtered at the source instead of inferred from held
+-- state. capslock is exempt because its release may not
+-- arrive, so its next press can come in flagged as a repeat,
+-- and dropping that would freeze the Caps estimate on a lock
+-- the player did toggle (see the Caps Lock section of
+-- doc/development/internals/examples/keyboard.md). Scene input
+-- is also dropped while the help overlay is up (the game is
+-- frozen behind it).
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
