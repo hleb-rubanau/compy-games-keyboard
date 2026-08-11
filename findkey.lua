@@ -56,25 +56,17 @@ function fkDone(st)
   return st.phase == "done"
 end
 
--- At the top notch, the next built game (or the menu when this
--- is the last game). Kept for Hunt, which still chains games on
--- a top win; the gauge games loop their top level instead.
-function fkGotoNext(cfg)
-  local nid = nextGameId(cfg.id)
-  if nid then
-    gotoScene(nid)
-  else
-    gotoScene("menu")
-  end
-end
-
--- Tab on the level-up screen (gauge games): below the top notch
--- step up one notch into a fresh level; at the top, another
--- review level at the same notch (endless). Learning is kept.
+-- Tab on the level-up screen (gauge games): below the top step
+-- up into a fresh level; at the top, another review level at
+-- the same one (endless). Learning is kept. A scene whose
+-- progression is its own rather than the notch (Hide's
+-- rotation, Load the train's platforms) advances it here.
 function fkAdvance(st, cfg)
   st.fw = { }
   st.burst = nil
-  if gaugeAtTop(cfg) then
+  if cfg.advance then
+    cfg.advance(st, cfg)
+  elseif gaugeAtTop(st, cfg) then
     -- another review level at the same top notch
     gaugeStartLevel(st, cfg)
   else
@@ -82,33 +74,40 @@ function fkAdvance(st, cfg)
   end
 end
 
--- The cross-game Tab label (Hunt): step up a level, or (at the
--- top notch) the next game / the menu after the last one.
-function fkDoneTabLabel(st, cfg)
-  if not gaugeAtTop(cfg) then
-    return STR.tab_level
-  end
-  if nextGameId(cfg.id) then
-    return STR.tab_next
-  end
-  return STR.tab_menu
+-- Two end-of-round screens, and which one a game shows turns on
+-- one question: is there anything new ahead?
+--
+-- Below the top of the ladder there is, so the level screen
+-- offers Tab and nothing else. It carries no exit line on
+-- purpose: children were leaving through one shown here.
+--
+-- At the top there is not, and a child who keeps pressing is
+-- replaying the same thing. So the win screen offers Enter to
+-- play again AND the way back to the menu -- stopping is the
+-- better answer to "there is nothing new", and it should be on
+-- screen as a real option rather than left to be guessed.
+function fkAtEnd(st, cfg)
+  return gaugeAtTop(st, cfg)
 end
 
--- The gauge games' Tab label: step up a level, or keep playing
--- the endless review level at the top notch.
-function fkLevelTabLabel(cfg)
-  if gaugeAtTop(cfg) then
-    return STR.tab_more
-  end
-  return STR.tab_level
-end
-
--- Level-up screen key (gauge games): Tab only -- the gauge
--- always moves forward, so there is no Enter/R replay.
 function fkDoneKey(st, cfg, k)
+  if fkAtEnd(st, cfg) then
+    if k == "return" or k == "kpenter" then
+      fkAdvance(st, cfg)
+    end
+    return
+  end
   if k == "tab" then
     fkAdvance(st, cfg)
   end
+end
+
+-- The gauge for a game on the standard notch ladder.
+function fkGauge(st, cfg, ink)
+  return {
+    fill = st.hits, of = st.goal, ink = ink,
+    rung = gaugeRung(st, cfg), rungs = gaugeRungs(st, cfg)
+  }
 end
 
 -- A wrong key: knock + pink glow only on the FIRST wrong of a
@@ -162,33 +161,37 @@ function fkDrawExitHint()
   gfx.print(txt, 12, y)
 end
 
--- Hunt's completion screen: a calm compliment + a clear choice
--- (Tab to advance, Enter/R to replay, Shift+Esc to the menu).
--- tabLabel is caller-supplied (notch-aware).
-function fkDrawDoneScreen(tabLabel)
+-- The win screen: a calm compliment and two equal offers, each
+-- shown as the caps to press. Stopping is one of them, because
+-- a child who has just finished a game is the one most likely
+-- to want to, and a dim line of prose does not tell a
+-- non-reader that.
+function fkDrawWinScreen()
   gfx.setColor(COL_OVERLAY)
   gfx.rectangle("fill", 0, 0, REF_W, REF_H)
-  drawBandText(STR.good_job, { 140, 220 },
+  drawBandText(STR.good_job, { 120, 200 },
     getFont(FONT_HEAD), COL_WARM)
-  drawBandText(tabLabel, { 286, 322 },
-    getFont(FONT_STATUS), COL_TEXT)
-  drawBandText(STR.replay, { 326, 362 },
-    getFont(FONT_STATUS), COL_DIM)
-  drawBandText(STR.back_hint, { 366, 402 },
-    getFont(FONT_STATUS), COL_DIM)
+  drawKeyHint("return", STR.replay, { 250, 300 }, COL_TEXT)
+  drawChordHint({ "lshift", "escape" }, STR.to_menu,
+    { 320, 370 }, COL_TEXT)
 end
 
--- The gauge games' level-up screen: only the compliment and the
--- Tab cue. The replay/exit lines were dropped -- children were
--- bailing via the Shift+Esc line shown here; the play screen
--- keeps its own persistent exit hint.
-function fkDrawLevelScreen(tabLabel)
+-- The level screen: the compliment and the Tab cue, nothing
+-- else. It carries no exit line on purpose.
+function fkDrawLevelScreen()
   gfx.setColor(COL_OVERLAY)
   gfx.rectangle("fill", 0, 0, REF_W, REF_H)
   drawBandText(STR.good_job, { 196, 276 },
     getFont(FONT_HEAD), COL_WARM)
-  drawBandText(tabLabel, { 300, 336 },
-    getFont(FONT_STATUS), COL_TEXT)
+  drawKeyHint("tab", STR.tab_level, { 300, 336 }, COL_TEXT)
+end
+
+function fkDrawEndScreen(st, cfg)
+  if fkAtEnd(st, cfg) then
+    fkDrawWinScreen()
+  else
+    fkDrawLevelScreen()
+  end
 end
 
 -- The brief wrong-key pink glow, but never over an existing
@@ -204,17 +207,20 @@ end
 -- The shared draw skeleton. deco is the per-key keyboard
 -- decoration (Press glows the target key; Find passes { }); a
 -- brief pink glow marks the last wrong key. The keycap target
--- shows while a target is live in either game.
-function fkDraw(st, cfg, deco)
+-- shows while a target is live in either game. overlay is an
+-- optional scene painter called over the board (Bubble draws
+-- its bubble there); the gauge games pass none.
+function fkDraw(st, cfg, deco, overlay)
   local glow = gaugeGlowing(st)
   local done = fkDone(st)
   fkWrongDeco(st, deco)
   drawKeyboard(deco)
+  if overlay then overlay() end
   if glow then drawKeycapTarget(gaugeCurrent(st)) end
   if st.burst then drawBurst(st.burst) end
-  if not done then drawWinGauge(st.hits, st.goal) end
+  if not done then drawWinGauge(fkGauge(st, cfg)) end
   drawIndicators(CAPS_STATE.on)
-  if done then fkDrawLevelScreen(fkLevelTabLabel(cfg)) end
+  if done then fkDrawEndScreen(st, cfg) end
   fwDraw(st)
   if not done then fkDrawExitHint() end
 end

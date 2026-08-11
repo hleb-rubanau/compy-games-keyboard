@@ -24,6 +24,20 @@ FONT_HEAD = 60
 FONT_BIG = 72
 FONT_TARGET_BIG = 80
 FONT_MENU = 34
+
+-- Menu grid. The list outgrew one column, so entries fill two,
+-- top to bottom then left to right. Rows are derived from the
+-- number of games, so a shorter build simply uses fewer, and
+-- menu.lua centres the block those rows make.
+
+MENU_COLS = 2
+MENU_STEP = 54
+
+-- Entries are set smaller than the heading: the longest name
+-- runs nearly the width of its column, and a clipped name is
+-- worse than a slightly smaller one.
+
+FONT_MENU_ITEM = 30
 FONT_STATUS = 24
 FONT_COUNT = 22
 FONT_HELP = 30

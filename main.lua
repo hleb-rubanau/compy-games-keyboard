@@ -12,13 +12,16 @@ gfx = love.graphics
 -- and recovered (the outer gfx.pop still runs, no stack leak)
 -- instead of freezing or crashing, so the app stays runnable
 -- while the problem is captured. Set DEBUG = false to ship.
+
 DEBUG = false
 DBG_LOG = "keyboard-debug.log"
 DBG_FRAME = 0
 DBG_LASTERR = nil
 
 function dbgLog(msg)
-  if not DEBUG then return end
+  if not DEBUG then 
+    return 
+  end
   local line = DBG_FRAME .. " " .. msg
   print("[KBD] " .. line)
   pcall(love.filesystem.append, DBG_LOG, line .. "\n")
@@ -26,6 +29,7 @@ end
 
 -- Log a thrown error once (deduped) so a per-frame throw does
 -- not spam the log.
+
 function dbgLogErr(where, err)
   if err == DBG_LASTERR then return end
   DBG_LASTERR = err
@@ -37,6 +41,7 @@ end
 -- restricted filesystem can never block startup). Read logs via
 -- `adb logcat | grep KBD` -- the save dir is not pullable under
 -- Android scoped storage.
+
 function dbgBoot()
   love.filesystem.write(DBG_LOG, "=== boot ===\n")
   dbgLog("save dir " .. love.filesystem.getSaveDirectory())
@@ -44,6 +49,7 @@ end
 
 -- Shared infrastructure plus the two scenes needed at boot
 -- (intro, menu). Mini-games are lazy-loaded on first entry.
+
 dofile("config.lua")
 dofile("pastel.lua")
 dofile("locale.lua")
@@ -65,13 +71,25 @@ dofile("menu.lua")
 
 -- Games present in this build (lazy-loaded). Adding a slice
 -- registers its file here; the menu picks it up structurally.
+
 SCENE_FILE.press = "press.lua"
 SCENE_FILE.find = "find.lua"
-SCENE_FILE.hunt = "hunt.lua"
+SCENE_FILE.astro = "astro.lua"
 SCENE_FILE.alt = "alt.lua"
+SCENE_FILE.words = "words.lua"
+SCENE_FILE.bubble = "bubble.lua"
+SCENE_FILE.hide = "hide.lua"
+SCENE_FILE.train = "train.lua"
 
 notchInit()
 inputInit()
+
+-- Suppress the system pointer: relative mode keeps it off the
+-- screen edges so the Android nav/status bars never reveal.
+-- The keyboard uses no mouse; the runner restores it on exit.
+-- TODO(root-access): replace with trackpad disable on entry.
+
+love.mouse.setRelativeMode(true)
 if DEBUG then pcall(dbgBoot) end
 gotoScene("intro")
 
@@ -79,32 +97,40 @@ gotoScene("intro")
 -- slow boot or GC spike never leaks into the first update or
 -- fast-forwards an animation (e.g. the intro typing) at once.
 -- DREW_ONCE flips true at the end of the first love.draw.
+
 DREW_ONCE = false
 MAX_DT = 0.1
 
 function updateStep(dt)
-  if not DREW_ONCE then return end
-  if dt > MAX_DT then dt = MAX_DT end
-  -- The pastel background eases every frame, even while a help
-  -- overlay pauses the game underneath.
+  if not DREW_ONCE then 
+    return 
+  end
+  if dt > MAX_DT then dt = MAX_DT 
+  end
   pastelTick(dt)
-  -- A modal pause (Alt+P, timed games only) or an open help
-  -- overlay (held Alt+H) freezes the active game; it resumes on
-  -- dismiss.
-  if PAUSED then return end
-  if helpOverlayShown() then return end
+  if PAUSED then 
+    return 
+  end
+  if helpOverlayShown() then 
+    return 
+  end
   sceneUpdate(dt)
 end
 
 function love.update(dt)
   DBG_FRAME = DBG_FRAME + 1
-  if not DEBUG then return updateStep(dt) end
+  if not DEBUG then 
+    return updateStep(dt) 
+  end
   local ok, err = pcall(updateStep, dt)
-  if not ok then dbgLogErr("UPDATE", err) end
+  if not ok 
+  then dbgLogErr("UPDATE", err) 
+  end
 end
 
 -- Draw in the 960x540 reference canvas, scaled uniformly and
 -- centered to the real resolution. Nothing scrolls.
+
 function drawStep()
   sceneDraw()
   if PAUSED then

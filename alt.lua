@@ -75,10 +75,21 @@ end
 
 -- The top-band keycap label for a target: a friendly name for
 -- the non-printing keys and space, else the glyph itself.
-function altTargetLabel(item)
-  if altIsKeyTarget(item) then return KB_LABEL[item] end
-  if item == " " then return "Space" end
-  return item
+-- A target drawn as a board key (the engraved enlarged cap):
+-- the service keys, and space (its cap IS its picture).
+function altTargetName(item)
+  if item == " " then return "space" end
+  if altIsKeyTarget(item) then return item end
+  return nil
+end
+
+function altDrawTarget(item)
+  local name = altTargetName(item)
+  if name then
+    drawKeycapTarget(name)
+    return
+  end
+  drawTargetCap(item)
 end
 
 -- Prefer a Shift-requiring glyph for a level's FIRST target if
@@ -272,22 +283,21 @@ end
 -- playing, never under the advance screen).
 function altDrawPlay()
   if gaugeGlowing(ALT) then
-    local label = altTargetLabel(gaugeCurrent(ALT))
-    drawTargetCap(label, #label == 1)
+    altDrawTarget(gaugeCurrent(ALT))
   end
-  drawWinGauge(ALT.hits, ALT.goal)
+  drawWinGauge(fkGauge(ALT, ALT_CFG))
   fkDrawExitHint()
 end
 
 function altDraw()
   local done = altDone()
-  drawKeyboard(altDeco(), true, true)
+  drawKeyboard(altDeco())
   if not done then altDrawPlay() end
   if altHintActive() then altHintFinger() end
   if ALT.burst then drawBurst(ALT.burst) end
   drawIndicators(CAPS_STATE.on)
   if done then
-    fkDrawLevelScreen(fkLevelTabLabel(ALT_CFG))
+    fkDrawEndScreen(ALT, ALT_CFG)
   end
   fwDraw(ALT)
 end

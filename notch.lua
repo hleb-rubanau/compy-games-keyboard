@@ -1,14 +1,13 @@
 -- Shared difficulty-notch core. Per-scene notch value, teacher
 -- chord shift saturating at the scene's declared bounds, and
--- reset-to-0 at program start. Every exercise drives the notch
--- by teacher chord (Hunt's win screen also climbs it), with the
--- re-entry policy below.
+-- configured defaults at program start. Every exercise drives
+-- the notch by teacher chord, with the re-entry policy below.
 
 NOTCH = { }
 
 function notchInit()
   for _, id in ipairs(MENU_ORDER) do
-    NOTCH[id] = 0
+    NOTCH[id] = NOTCH_START[id] or 0
   end
 end
 

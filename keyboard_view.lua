@@ -3,6 +3,10 @@
 -- keyboard band by a computed scale and origin (no hardcoded
 -- 960px path). drawKeyboard(deco) tints/pulses/glows keys via a
 -- per-key decoration map; keyRect(name) exposes key geometry.
+-- Caps draw in the original board style: black fill, Sarasa
+-- labels, the shifted symbol engraved above the base one.
+
+require("utf8")
 
 KB = { scale = 0, x = 0, y = 0, w = 0, h = 0 }
 KB.cells = { }
@@ -63,37 +67,138 @@ for _, n in ipairs({ "capslock", "return" }) do
   KB_WMM[n] = KB_WIDE_W
 end
 
--- Display labels for non-character keys.
-KB_LABEL = { }
-KB_LABEL.escape = "Esc"
-KB_LABEL.numlk = "Num"
-KB_LABEL.delete = "Del"
-KB_LABEL.backspace = "Bksp"
-KB_LABEL.tab = "Tab"
-KB_LABEL["return"] = "Enter"
-KB_LABEL.capslock = "Caps"
-KB_LABEL.lshift = "Shift"
-KB_LABEL.rshift = "Shift"
-KB_LABEL.lctrl = "Ctrl"
-KB_LABEL.lalt = "Alt"
-KB_LABEL.menu = "Menu"
-KB_LABEL.fn = "Fn"
-KB_LABEL.zzz = "Zzz"
-KB_LABEL.pause = "Pause"
-KB_LABEL.space = ""
-KB_LABEL.up = "↑"
-KB_LABEL.down = "↓"
-KB_LABEL.left = "←"
-KB_LABEL.right = "→"
-for i = 1, 12 do
-  KB_LABEL["f" .. i] = "F" .. i
+-- Original cap engravings (ported from graphics.lua). Digit
+-- and punctuation caps print the shifted symbol above the
+-- base one; named keys carry their full engraving; letters
+-- print uppercase, like the physical keys.
+
+CAP_NUM_SYM = {
+  "!", "@", "#", "$", "%",
+  "^", "&", "*", "(", [0] = ")"
+}
+CAP_LOWER, CAP_UPPER = { }, { }
+for num, sym in pairs(CAP_NUM_SYM) do
+  local n = "" .. num
+  CAP_LOWER[n] = n
+  CAP_UPPER[n] = sym
 end
 
--- Single-glyph keys that still want the large keycap font even
--- though their label is multi-byte UTF-8.
-KB_ARROW = {
-  up = true, down = true, left = true, right = true
-}
+function capShift(lower, upper)
+  CAP_LOWER[lower] = lower
+  CAP_UPPER[lower] = upper
+end
+capShift("`", "~")
+capShift("-", "_")
+capShift("=", "+")
+capShift("\\", "|")
+capShift(";", ":")
+capShift(",", "<")
+capShift(".", ">")
+capShift("/", "?")
+capShift("[", "{")
+capShift("]", "}")
+capShift("'", "\"")
+
+-- Original font sizes in millimetres.
+CAP_F1 = 5
+CAP_F2 = 4
+CAP_F3 = 3
+
+-- Board-cap text forms in the original offsets; unit s is
+-- pixels per millimetre of the drawn cap.
+
+function capLetter(cell, name, s)
+  gfx.setFont(capFont(CAP_F1 * s))
+  gfx.print(string.upper(name), cell.x + 2 * s, cell.y + s)
+end
+
+function capDouble(cell, name, s)
+  gfx.setFont(capFont(CAP_F2 * s))
+  gfx.print(CAP_UPPER[name], cell.x + 2 * s, cell.y + s)
+  gfx.print(CAP_LOWER[name], cell.x + 2 * s,
+    cell.y + (2 + CAP_F2) * s)
+end
+
+function capDouble2(cell, name, s)
+  gfx.setFont(capFont(CAP_F3 * s))
+  gfx.print(CAP_UPPER[name], cell.x + s, cell.y + 2 * s)
+  gfx.print(CAP_LOWER[name], cell.x + s,
+    cell.y + (3 + CAP_F3) * s)
+end
+
+function capSingle(cell, name, s)
+  gfx.setFont(capFont(CAP_F3 * s))
+  gfx.print(CAP_UPPER[name], cell.x + s, cell.y + 3 * s)
+end
+
+function capSpace()
+end
+
+-- Fn and Zzz keep their cyan engraving.
+function capAux(cell, name, s, a)
+  kcapColor(CAP_AUX, a)
+  capSingle(cell, name, s)
+end
+
+CAP_FORM = { space = capSpace }
+for name in pairs(CAP_LOWER) do
+  CAP_FORM[name] = capDouble
+end
+
+function capKey(name, label)
+  CAP_UPPER[name] = label
+  CAP_FORM[name] = capSingle
+end
+
+function capKey2(name, up, lo)
+  CAP_UPPER[name] = up
+  CAP_LOWER[name] = lo
+  CAP_FORM[name] = capDouble2
+end
+
+capKey("escape", "Esc")
+capKey("numlk", "Numlk")
+capKey("delete", "Delete")
+capKey("backspace", utf8.char(10229))
+capKey("tab", "Tab " .. utf8.char(8633))
+capKey("return", "Enter")
+capKey("lshift", utf8.char(8679) .. "Shift")
+capKey("rshift", "Shift")
+capKey("lctrl", "Ctrl")
+capKey("lalt", "Alt")
+capKey("menu", utf8.char(9636, 8598))
+capKey("fn", "Fn")
+capKey("zzz", "Zzz")
+capKey("up", utf8.char(8593))
+capKey("left", utf8.char(8592))
+capKey("down", utf8.char(8595))
+capKey("right", utf8.char(8594))
+for i = 1, 12 do
+  capKey("f" .. i, "F" .. i)
+end
+capKey2("capslock", "Caps", "Lock")
+capKey2("pause", "Pause", "Break")
+CAP_FORM.fn = capAux
+CAP_FORM.zzz = capAux
+
+-- Can this name be drawn as a cap at all? A named key with a
+-- form engraves; a single glyph falls through to capLetter and
+-- prints upright. Anything else -- select, printscreen, a name
+-- from a keyboard this game knows nothing about -- has no cap,
+-- and capLetter would print it straight past the edge.
+--
+-- This is the test for ECHOING A KEY THE CHILD PRESSED, which
+-- must simply not be shown. It is NOT a licence to clamp a cap
+-- the game itself chose to present: an unmapped name on a
+-- TARGET still has to draw wrong and loud, which is the only
+-- reason the stray-key defect was ever noticed. See
+-- docs/decisions.md -> invalid-state-renders-visibly.
+
+function capKnown(name)
+  if not name then return false end
+  if CAP_FORM[name] then return true end
+  return #name == 1
+end
 
 function kbWidthMM(name, ri)
   local w = KB_WMM[name]
@@ -156,14 +261,24 @@ function kbBuildCells()
 end
 
 kbComputeScale()
-KCAP_BIG = getFont(math.floor(5 * KB.scale))
-KCAP_SMALL = getFont(math.floor(2.7 * KB.scale))
--- Larger keycap fonts for the top-band target (Press/Find/Alt).
--- Monospace glyph font so 0/O and l/I/1 read clearly when the
--- child must FIND the key (the keyboard picture stays sans).
+
+-- Sarasa Bold, the original board font (a bundled platform
+-- asset: the same path graphics.lua loaded). Cached by pixel
+-- size, so the board and every enlarged cap share fonts.
+CAP_FONT_PATH = "assets/fonts/SarasaGothicJ-Bold.ttf"
+CAP_FONTS = { }
+function capFont(px)
+  px = math.floor(px)
+  if not CAP_FONTS[px] then
+    CAP_FONTS[px] = gfx.newFont(CAP_FONT_PATH, px)
+  end
+  return CAP_FONTS[px]
+end
+-- Top-band target sizing, plus the glyph font for Alt's
+-- produced-glyph targets (monospace so 0/O and l/I/1 read
+-- clearly). Named-key targets engrave instead (below).
 KCAP_T_H = 64
 KCAP_T_BIG = getGlyphFont(40)
-KCAP_T_SMALL = getGlyphFont(26)
 kbBuildCells()
 
 -- Effective case of letter keycaps: upper iff Caps XOR Shift.
@@ -172,29 +287,16 @@ function capsEffectiveUpper()
   return CAPS_STATE.on
 end
 
-function kbLabel(name)
-  local l = KB_LABEL[name]
-  if l then return l end
-  if KB_SHIFTLABEL and INPUT.shift and SHIFT_MAP[name] then
-    return SHIFT_MAP[name]
-  end
-  if #name == 1 then
-    if KB_LIVECASE and isAlphaChar(name)
-        and not capsEffectiveUpper() then
-      return name
-    end
-    return string.upper(name)
-  end
-  return name
-end
-
 -- Shared keycap renderer. drawKeycap(cell, opts) draws ONE cap
 -- at an arbitrary cell { x, y, w, h }: the on-board keys, the
 -- top-band target, and Hunt's falling caps all go through it.
--- opts = { label, font, bg, glow, color, radius, scale, alpha }
--- is required; its fields are optional, but a label needs a
--- font. The caller owns cell geometry, layout, and any
--- glow-layering; this draws a single cap.
+-- opts = { name, unit, label, font, bg, glow, halo, color,
+-- scale, alpha } is required; its fields are optional. A named
+-- board key engraves via the original cap forms (unit = px per
+-- mm); an explicit label prints centered and needs a font. glow
+-- frames the cap edge, halo radiates outside it. The caller
+-- owns cell geometry, layout, and any glow-layering; this draws
+-- a single cap.
 function kcapColor(c, a)
   gfx.setColor(c[1], c[2], c[3], (c[4] or 1) * a)
 end
@@ -204,30 +306,72 @@ function kcapLabel(cell, opts, a)
   if not label or label == "" then return end
   local font = opts.font
   gfx.setFont(font)
-  kcapColor(opts.color or COL_KEY_LABEL, a)
+  kcapColor(opts.color or CAP_LABEL, a)
   local ty = cell.y + (cell.h - font:getHeight()) / 2
   gfx.printf(label, cell.x, ty, cell.w, "center")
 end
 
-function kcapOutline(cell, opts, r, a)
-  if opts.glow then
-    kcapColor(opts.glow, a)
-    gfx.setLineWidth(3)
-    gfx.rectangle("line", cell.x, cell.y, cell.w, cell.h, r)
-    gfx.setLineWidth(1)
-  else
-    kcapColor(COL_KEY_EDGE, a)
-    gfx.rectangle("line", cell.x, cell.y, cell.w, cell.h, r)
+-- A soft radiance OUTSIDE the cap: concentric frames stepping
+-- out, each fainter, so a cap can be marked by class without
+-- touching its black face or its engraving (a falling cap the
+-- child must skip, or one to catch). Distinct from the glow
+-- frame, which sits on the cap edge.
+
+CAP_HALO_LAYERS = 3
+CAP_HALO_STEP = 5
+CAP_HALO_ALPHA = 0.5
+
+function kcapHaloRing(cell, c, a, i)
+  local d = CAP_HALO_STEP * i
+  kcapColor(c, a)
+  gfx.setLineWidth(CAP_HALO_STEP)
+  gfx.rectangle("line", cell.x - d, cell.y - d,
+    cell.w + d * 2, cell.h + d * 2)
+  gfx.setLineWidth(1)
+end
+
+function kcapHalo(cell, c, a)
+  for i = 1, CAP_HALO_LAYERS do
+    local fade = 1 - (i - 1) / CAP_HALO_LAYERS
+    kcapHaloRing(cell, c, a * fade * CAP_HALO_ALPHA, i)
   end
 end
 
-function kcapFace(cell, opts)
-  local r = opts.radius or 5
-  local a = opts.alpha or 1
-  kcapColor(opts.bg or COL_KEY, a)
-  gfx.rectangle("fill", cell.x, cell.y, cell.w, cell.h, r)
-  kcapOutline(cell, opts, r, a)
+-- The glow frame stays: it is the find-target affordance the
+-- original board expressed through key_bg fills.
+function kcapGlowFrame(cell, opts, a)
+  kcapColor(opts.glow, a)
+  gfx.setLineWidth(3)
+  gfx.rectangle("line", cell.x, cell.y, cell.w, cell.h)
+  gfx.setLineWidth(1)
+end
+
+-- Named caps engrave via the original forms (opts.color can
+-- override the engraving color -- Hunt's state ramp); a bare
+-- label (Alt's glyph target) prints centered.
+function kcapText(cell, opts, a)
+  if opts.name then
+    kcapForms(cell, opts, a)
+    return
+  end
   kcapLabel(cell, opts, a)
+end
+
+function kcapForms(cell, opts, a)
+  kcapColor(opts.color or CAP_LABEL, a)
+  local form = CAP_FORM[opts.name] or capLetter
+  form(cell, opts.name, opts.unit, a)
+end
+
+-- The cap face, in the original board style: a sharp black
+-- fill, no paper outline or corner rounding.
+function kcapFace(cell, opts)
+  local a = opts.alpha or 1
+  if opts.halo then kcapHalo(cell, opts.halo, a) end
+  kcapColor(opts.bg or CAP_BG, a)
+  gfx.rectangle("fill", cell.x, cell.y, cell.w, cell.h)
+  if opts.glow then kcapGlowFrame(cell, opts, a) end
+  kcapText(cell, opts, a)
 end
 
 function drawKeycap(cell, opts)
@@ -242,16 +386,13 @@ function drawKeycap(cell, opts)
   gfx.pop()
 end
 
--- On-board key: a thin wrapper over drawKeycap. Label and its
--- size follow the live keyboard rules (kbLabel); dec carries
--- the per-key bg/glow and the pulse scale.
+-- On-board key: the original engraved cap, keyed by name;
+-- dec carries the per-key bg/glow and the pulse scale.
 function drawKey(cell, dec, sc)
-  local label = kbLabel(cell.name)
-  local big = #label == 1 or KB_ARROW[cell.name]
   drawKeycap(cell, {
-    label = label,
-    font = big and KCAP_BIG or KCAP_SMALL,
-    bg = (dec and dec.bg) or COL_KEY,
+    name = cell.name,
+    unit = KB.scale,
+    bg = dec and dec.bg,
     glow = dec and dec.glow,
     scale = sc
   })
@@ -263,13 +404,8 @@ function kbRaised(dec)
   return dec and (dec.pulse or dec.glow)
 end
 
--- livecase = letter keycaps follow effective Caps/Shift case.
--- shiftlabel = number/punct keys show their shifted symbol
--- ONLY while a Shift key is held (Alt characters), so the label
--- never lies about current output. Other scenes pass nil.
-function drawKeyboard(deco, livecase, shiftlabel)
-  KB_LIVECASE = livecase
-  KB_SHIFTLABEL = shiftlabel
+-- Board caps are static engravings, like the physical keys.
+function drawKeyboard(deco)
   for _, c in ipairs(KB.cells) do
     drawKey(c, deco and deco[c.name], 1)
   end
@@ -285,14 +421,95 @@ function keyRect(name)
   return KB.rect[name]
 end
 
--- Target keycap in the top band (Press/Find/Alt). The keyboard
--- picture below carries any glow; this is the calm "what to
--- press" cap. Space shows "Space"; specials use KB_LABEL.
-function kbTargetLabel(name)
-  if name == "space" then return "Space" end
-  return kbLabel(name)
+-- Named-key target in the top band: an ENLARGED COPY of the
+-- board cap, engraved by the same forms -- so a non-reading
+-- child matches pictures, never words. The keyboard picture
+-- below carries any glow; this is the calm "what to press"
+-- cap.
+function kbTargetKeyCell(name)
+  local u = KCAP_T_H / KB_STD_H
+  local w = (KB_WMM[name] or KB_STD_W) * u
+  local band = HEADER_Y1 - HEADER_Y0
+  local cell = { }
+  cell.x = (REF_W - w) / 2
+  cell.y = HEADER_Y0 + (band - KCAP_T_H) / 2
+  cell.w = w
+  cell.h = KCAP_T_H
+  return cell
 end
 
+function drawKeycapTarget(name)
+  drawKeycap(kbTargetKeyCell(name), {
+    name = name,
+    unit = KCAP_T_H / KB_STD_H
+  })
+end
+
+-- A key-hint line: the engraved cap of the key to press, then
+-- the hint text, centered together in a y-band. The cap is the
+-- picture a non-reading child matches against the board.
+KEYHINT_GAP = 12
+KEYHINT_PAD = 10
+
+function keyHintCapW(name, h)
+  local u = h / KB_STD_H
+  return (KB_WMM[name] or KB_STD_W) * u
+end
+
+function keyHintX(cw, text, font)
+  return (REF_W - cw - KEYHINT_GAP
+    - font:getWidth(text)) / 2
+end
+
+function drawKeyHint(name, text, band, color)
+  local font = getFont(FONT_STATUS)
+  local h = font:getHeight() + KEYHINT_PAD
+  local cw = keyHintCapW(name, h)
+  local x = keyHintX(cw, text, font)
+  local y = band[1] + (band[2] - band[1] - h) / 2
+  drawKeycap({ x = x, y = y, w = cw, h = h },
+    { name = name, unit = h / KB_STD_H })
+  gfx.setFont(font)
+  gfx.setColor(color)
+  gfx.print(text, x + cw + KEYHINT_GAP,
+    y + KEYHINT_PAD / 2)
+end
+
+-- The same line for a key that needs a modifier held: the caps
+-- sit side by side, closer to each other than to the text, so
+-- they read as one chord rather than two choices.
+
+function chordHintW(keys, h)
+  local w = 0
+  for _, name in ipairs(keys) do
+    w = w + keyHintCapW(name, h)
+  end
+  return w + (#keys - 1) * KEYHINT_GAP / 2
+end
+
+function chordHintCaps(keys, x, y, h)
+  for _, name in ipairs(keys) do
+    local w = keyHintCapW(name, h)
+    drawKeycap({ x = x, y = y, w = w, h = h },
+      { name = name, unit = h / KB_STD_H })
+    x = x + w + KEYHINT_GAP / 2
+  end
+end
+
+function drawChordHint(keys, text, band, color)
+  local font = getFont(FONT_STATUS)
+  local h = font:getHeight() + KEYHINT_PAD
+  local cw = chordHintW(keys, h)
+  local x = keyHintX(cw, text, font)
+  local y = band[1] + (band[2] - band[1] - h) / 2
+  chordHintCaps(keys, x, y, h)
+  gfx.setFont(font)
+  gfx.setColor(color)
+  gfx.print(text, x + cw + KEYHINT_GAP,
+    y + KEYHINT_PAD / 2)
+end
+
+-- Glyph target cell (Alt): sized from the glyph itself.
 function kbTargetCell(label, font)
   local w = font:getWidth(label) + 28
   if w < KCAP_T_H then w = KCAP_T_H end
@@ -305,20 +522,11 @@ function kbTargetCell(label, font)
   return cell
 end
 
--- Draw a top-band target cap from an already-resolved label;
--- big picks the large monospace glyph font (single glyph) over
--- the smaller one (multi-letter labels: Space, Bksp). Shared by
--- the find-key target (by key name) and Alt (by glyph).
-function drawTargetCap(label, big)
-  local font = big and KCAP_T_BIG or KCAP_T_SMALL
-  drawKeycap(kbTargetCell(label, font), {
-    label = label, font = font, radius = 8
+-- Alt's produced-glyph target: a single glyph on a cap.
+function drawTargetCap(label)
+  drawKeycap(kbTargetCell(label, KCAP_T_BIG), {
+    label = label, font = KCAP_T_BIG
   })
-end
-
-function drawKeycapTarget(name)
-  local label = kbTargetLabel(name)
-  drawTargetCap(label, #label == 1 or KB_ARROW[name])
 end
 
 -- Expanding-ring success burst, b = { x, y, t } with t in
@@ -334,11 +542,41 @@ function drawBurst(b)
   gfx.setLineWidth(1)
 end
 
+-- The bang: a blast at a cap the child should not have pressed.
+-- An expanding red ring with shards thrown out -- bigger and
+-- sharper than the catch burst, so a forbidden press reads as
+-- an event, not a near-miss. b = { x, y, t }.
+
+BANG_T = 0.45
+BANG_R = 70
+BANG_SHARDS = 8
+BANG_SHARD_R = 11
+
+function bangShard(b, i, p)
+  local ang = (i / BANG_SHARDS) * 2 * math.pi
+  local d = BANG_R * (0.4 + p * 0.8)
+  gfx.circle("fill", b.x + math.cos(ang) * d,
+    b.y + math.sin(ang) * d, BANG_SHARD_R * (1 - p))
+end
+
+function drawBang(b)
+  local a = b.t / BANG_T
+  local p = 1 - a
+  kcapColor(COL_RED, a)
+  gfx.setLineWidth(4)
+  gfx.circle("line", b.x, b.y, BANG_R * p)
+  gfx.setLineWidth(1)
+  for i = 1, BANG_SHARDS do
+    bangShard(b, i, p)
+  end
+end
+
 -- Subtle win-gauge: a vertical thermometer in the right margin
 -- (the left edge is clipped on current hardware), filling
 -- bottom-up as the set is cleared. Clear of the bottom hints
--- and the lock cluster. Dark ink reads over every pastel.
--- Reused by the round-gauge exercises.
+-- and the lock cluster. Dark ink reads over every pastel; a
+-- scene played against a dark background passes its own light
+-- ink instead, so there is one gauge rather than two.
 WGAUGE_W = 8
 
 function winGaugeFrac(cleared, total)
@@ -349,14 +587,61 @@ function winGaugeFrac(cleared, total)
   return f
 end
 
-function drawWinGauge(cleared, total)
-  local f = winGaugeFrac(cleared, total)
+function winGaugeTrough(c, x, y0, h)
+  gfx.setColor(c[1], c[2], c[3], 0.2)
+  gfx.rectangle("fill", x, y0, WGAUGE_W, h, 4)
+  gfx.setColor(c[1], c[2], c[3], 0.5)
+  gfx.setLineWidth(1)
+  gfx.rectangle("line", x, y0, WGAUGE_W, h, 4)
+end
+
+-- The whole bar is the whole LADDER, not one level of it. A
+-- gauge that empties every time a level is cleared reads as
+-- progress being taken away; this one keeps climbing, and the
+-- ticks say how many rungs there are and which one is under
+-- way. g = { fill, of, rung, rungs, ink }.
+
+function winGaugeSpan(g)
+  local rungs = g.rungs or 1
+  local rung = g.rung or 1
+  local within = winGaugeFrac(g.fill, g.of)
+  return (rung - 1 + within) / rungs
+end
+
+function winGaugeTicks(g, x, y0, h)
+  local rungs = g.rungs or 1
+  if rungs < 2 then return end
+  local c = g.ink or COL_KEY_LABEL
+  gfx.setColor(c[1], c[2], c[3], 0.65)
+  for i = 1, rungs - 1 do
+    gfx.rectangle("fill", x, y0 + h * (1 - i / rungs) - 1,
+      WGAUGE_W, 2)
+  end
+end
+
+-- A gauge that has something to say beyond its reading: three
+-- soft frames spreading outward, so it can be noticed without
+-- being read.
+
+function winGaugeGlow(g, x, y0, h)
+  if not g.glow then return end
+  local c = g.ink or COL_KEY_LABEL
+  for i = 1, 3 do
+    gfx.setColor(c[1], c[2], c[3], 0.13)
+    gfx.rectangle("fill", x - i * 4, y0 - i * 4,
+      WGAUGE_W + i * 8, h + i * 8, 6)
+  end
+end
+
+function drawWinGauge(g)
+  local f = winGaugeSpan(g)
   local x = REF_W - 16
   local y0 = KBAND_Y0
   local h = KBAND_Y1 - KBAND_Y0
-  local c = COL_KEY_LABEL
-  gfx.setColor(c[1], c[2], c[3], 0.18)
-  gfx.rectangle("fill", x, y0, WGAUGE_W, h, 4)
-  gfx.setColor(c[1], c[2], c[3], 0.85)
+  local c = g.ink or COL_KEY_LABEL
+  winGaugeGlow(g, x, y0, h)
+  winGaugeTrough(c, x, y0, h)
+  gfx.setColor(c[1], c[2], c[3], 0.9)
   gfx.rectangle("fill", x, y0 + h * (1 - f), WGAUGE_W, h * f, 4)
+  winGaugeTicks(g, x, y0, h)
 end
