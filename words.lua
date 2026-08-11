@@ -215,10 +215,23 @@ function wordsBad()
 end
 
 -- Printable glyphs are judged here (every Words target is
--- printable). The inputStale guard drops a held/released or
--- chord glyph, exactly as Alt does.
+-- printable). spendGlyph claims one glyph per press and drops
+-- the rest, exactly as Alt does.
+--
+-- It replaces inputStale, which this scene was written against
+-- and which no longer exists: that filter dropped a glyph whose
+-- producing key was HELD, and keypressed and textinput have no
+-- fixed order between them, so on a build that delivers the
+-- keypress first the key is already held at its own first
+-- glyph and every fresh target is thrown away. That inference
+-- is what made the Alt scene deaf on the device. Claiming asks
+-- the question that has one answer in both orders: has a glyph
+-- for this key been judged since its last release.
+--
+-- The textinput heal rewrites both judges and subtracts
+-- spendGlyph; this call moves with it rather than surviving it.
 function wordsTextinput(ch)
-  if inputStale(wordsBaseKey(ch)) then return end
+  if spendGlyph(wordsBaseKey(ch)) then return end
   if wordsDone() then return end
   local want = wordsExpected()
   if want == "" then return end
