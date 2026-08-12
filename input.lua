@@ -197,11 +197,15 @@ function appKeypressed(k, _, isr)
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
   if helpOverlayShown() then return end
-  -- A modifier's own press names no combo, so "alt+*" cannot
-  -- take a bare Alt press. Scenes ignore modifiers, but the
-  -- intro finishes its typewriter on any key -- intro.lua has
-  -- the asymmetry this leaves.
-  if Key.is_alt(k) then return end
+  -- A modifier's own press names no combo, so no class can take
+  -- one. Alt+key is a chord whatever the key is, so a modifier
+  -- pressed while Alt is held -- Alt itself included -- is
+  -- dropped here instead. Ctrl+Alt is a different class and
+  -- passes: scenes ignore modifiers, but the intro finishes its
+  -- typewriter on any key.
+  if Key.alt() and not Key.ctrl() and Key.is_mod(k) then
+    return
+  end
   local s = SCENES[ACTIVE]
   if s and s.keypressed then s.keypressed(k) end
 end
