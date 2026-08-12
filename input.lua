@@ -49,11 +49,11 @@ end
 -- typed target, and their only job is the claim. An exact
 -- binding wins over a class, so alt+p / alt+shift+p pause and
 -- claim for themselves.
--- Ctrl+Alt+H is a different modifier set, so a different class.
--- It re-arms the active scene's hint through the onHint
--- descriptor entry, the way ctrl+alt+up reaches onNotch. Being
--- a shortcut it is taken in EVERY scene, including the ones
--- that judge key targets.
+-- Ctrl+Alt+H is a different modifier set, so a different class,
+-- and it too is bound twice. It re-arms the active scene's hint
+-- through the onHint descriptor entry, the way ctrl+alt+up
+-- reaches onNotch. Being a shortcut it is taken in EVERY scene,
+-- including the ones that judge key targets.
 local function register_reserved()
   local fn = compy.input.fn
   local sc = compy.input.shortcuts.keypressed
@@ -79,10 +79,12 @@ local function register_reserved()
   sc["alt+p"] = pause
   sc["alt+shift+p"] = pause
   local rearm = fn.ignore_repeat(hintReenable)
-  sc["ctrl+alt+h"] = fn.stop_here(function(k, sk, isr)
+  local hint = fn.stop_here(function(k, sk, isr)
     claimChord(k)
     rearm(k, sk, isr)
   end)
+  sc["ctrl+alt+h"] = hint
+  sc["ctrl+alt+shift+h"] = hint
 end
 
 function inputInit()
