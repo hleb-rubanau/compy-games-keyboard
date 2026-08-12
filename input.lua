@@ -201,11 +201,14 @@ function appKeypressed(k, _, isr)
   if helpOverlayShown() then return end
   -- A modifier's own press names no combo, so no class can take
   -- one. Alt+key is a chord whatever the key is, so a modifier
-  -- pressed while Alt is held -- Alt itself included -- is
-  -- dropped here instead. Ctrl+Alt is a different class and
-  -- passes: scenes ignore modifiers, but the intro finishes its
-  -- typewriter on any key.
-  if Key.alt() and not Key.ctrl() and Key.is_mod(k) then
+  -- pressed while Alt is held is dropped here, Alt's own press
+  -- included -- named rather than polled, since whether
+  -- the device already reports a key down inside its own
+  -- keypressed is not something to depend on. Ctrl+Alt is a
+  -- different modifier set and passes: scenes ignore modifiers,
+  -- but the intro finishes its typewriter on any key.
+  local alt = Key.alt() or Key.is_alt(k)
+  if alt and not Key.ctrl() and Key.is_mod(k) then
     return
   end
   local s = SCENES[ACTIVE]
