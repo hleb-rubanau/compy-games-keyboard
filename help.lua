@@ -9,11 +9,9 @@
 
 -- Alt+H is a chord that is HELD, not one that fires, so it is
 -- asked rather than bound: the overlay is up for exactly as
--- long as the keys are. The IDE's Key.any_pressed answers for a
--- non-modifier key too; the plain LOVE call is kept so this
--- file also runs standalone.
+-- long as the keys are, and it cannot wedge on a lost release.
 function helpHeld()
-  local h = love.keyboard.isDown("h")
+  local h = Key.any_pressed("h")
   return h and Key.alt() and not Key.ctrl()
 end
 

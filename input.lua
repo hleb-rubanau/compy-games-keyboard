@@ -137,10 +137,10 @@ function glyphBaseKey(ch)
   return ch
 end
 
--- love.keyboard.isDown RAISES on a string that is not one of
--- LOVE's key constants ("Invalid key constant: ~"), and a
--- produced character is not always a key name -- an IME or
--- dead-key composition can map to nothing this keyboard has.
+-- The device call RAISES on a string that is not one of LOVE's
+-- key constants ("Invalid key constant: ~"), and a produced
+-- character is not always a key name -- an IME or dead-key
+-- composition can map to nothing this keyboard has.
 -- A claim that cannot be polled can never be released, so it is
 -- never taken: such a character is accepted, and holding one
 -- would repeat it. No scene targets one. Asked once per name,
@@ -149,7 +149,7 @@ local POLLABLE = { }
 local function pollable(k)
   local known = POLLABLE[k]
   if known == nil then
-    known = pcall(love.keyboard.isDown, k)
+    known = pcall(Key.any_pressed, k)
     POLLABLE[k] = known
   end
   return known
@@ -172,11 +172,9 @@ end
 -- so clearing at the release would let that character through
 -- as a fresh one nobody typed. Asking the keyboard needs no
 -- window, no clock and no ordering.
--- Key.any_pressed(k) is the IDE's form of this call; the plain
--- LOVE one is kept so this file also runs standalone.
 function inputTick()
   for k in pairs(GLYPH_CLAIMED) do
-    if not love.keyboard.isDown(k) then
+    if not Key.any_pressed(k) then
       GLYPH_CLAIMED[k] = nil
     end
   end
