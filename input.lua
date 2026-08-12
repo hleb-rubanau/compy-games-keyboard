@@ -217,13 +217,16 @@ end
 
 -- isr is the API's isrepeat (third hook argument): a held key
 -- is filtered at the source instead of inferred from held
--- state. capslock is exempt because its release may not
--- arrive, so its next press can come in flagged as a repeat,
--- and dropping that would freeze the Caps estimate on a lock
--- the player did toggle (see the Caps Lock section of
--- doc/development/internals/examples/keyboard.md). Scene input
--- is also dropped while the help overlay is up (the game is
--- frozen behind it).
+-- state. capslock's exemption is INHERITED from upstream and
+-- kept deliberately, not reasoned from here: there it was
+-- exempt from a held-set staleness test that a missing release
+-- would wedge, freezing the Caps estimate for the session.
+-- Under isrepeat nothing can eat a toggle -- a fresh press is
+-- never flagged as a repeat -- so the exemption's only effect
+-- now is that capslock REPEATS reach capsToggle (see the Caps
+-- Lock section of doc/development/internals/examples/keyboard.md).
+-- Scene input is also dropped while the help overlay is up (the
+-- game is frozen behind it).
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
