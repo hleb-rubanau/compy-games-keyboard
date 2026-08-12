@@ -89,16 +89,29 @@ end
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
 -- a different class -- which is the "and not Ctrl" test this
 -- file used to write out by hand before combo classes existed.
+--
+-- A combo is its modifier set EXACTLY, where the hand-written
+-- tests these replaced were one-sided: "shift and not ctrl" also
+-- accepted Alt, and "ctrl and alt" also accepted Shift. Each
+-- gesture is therefore bound twice, to the same handler, so
+-- Alt+Shift+Esc still goes back and Ctrl+Alt+Shift+Up still
+-- notches. Binding the value twice is the whole cost.
 local function register_reserved()
   local fn = compy.input.fn
   local sc = compy.input.shortcuts.keypressed
-  sc["shift+escape"] = fn.stop_here(fn.ignore_repeat(goBack))
-  sc["ctrl+alt+up"] = fn.stop_here(fn.ignore_repeat(function()
+  local back = fn.stop_here(fn.ignore_repeat(goBack))
+  local notch_up = fn.stop_here(fn.ignore_repeat(function()
     notchAdjust(1)
   end))
-  sc["ctrl+alt+down"] = fn.stop_here(fn.ignore_repeat(function()
+  local notch_down = fn.stop_here(fn.ignore_repeat(function()
     notchAdjust(-1)
   end))
+  sc["shift+escape"] = back
+  sc["alt+shift+escape"] = back
+  sc["ctrl+alt+up"] = notch_up
+  sc["ctrl+alt+shift+up"] = notch_up
+  sc["ctrl+alt+down"] = notch_down
+  sc["ctrl+alt+shift+down"] = notch_down
   sc["alt+*"] = fn.stop_here(claimChord)
   sc["alt+p"] = fn.stop_here(function(k, _, isr)
     claimChord(k)
@@ -194,6 +207,14 @@ function appKeypressed(k, _, isr)
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
   if helpOverlayShown() then return end
+  -- A bare Alt press reaches here where it used to be swallowed:
+  -- the hand-written chord test caught it (Alt was held, and the
+  -- key WAS Alt), while "alt+*" cannot -- a modifier's own press
+  -- names no combo. Scenes ignore modifiers, but the intro
+  -- finishes its typewriter on any key, so without this Alt alone
+  -- would skip it. Lone Shift does skip it, here as upstream:
+  -- that asymmetry is the game's, and is left alone.
+  if Key.is_alt(k) then return end
   local s = SCENES[ACTIVE]
   if s and s.keypressed then s.keypressed(k) end
 end
