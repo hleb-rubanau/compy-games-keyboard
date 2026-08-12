@@ -75,8 +75,10 @@ end
 -- class is its modifier set exactly, where the hand-written test
 -- this replaced said only "Alt and not Ctrl" and so caught
 -- Alt+Shift+key too. Their only job is the claim.
--- alt+p is an exact binding and exact wins over the class, so it
--- claims for itself.
+-- alt+p and alt+shift+p are exact bindings, and exact wins over
+-- the class, so they pause and claim for themselves. Both are
+-- needed for the same reason Alt+Shift+Esc is: the test they
+-- replaced accepted Shift.
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
 -- a different class -- which is the "and not Ctrl" test this
 -- file used to write out by hand before combo classes existed.
@@ -94,9 +96,10 @@ end
 -- A combo is its modifier set EXACTLY, where the hand-written
 -- tests these replaced were one-sided: "shift and not ctrl" also
 -- accepted Alt, and "ctrl and alt" also accepted Shift. Each
--- gesture is therefore bound twice, to the same handler, so
--- Alt+Shift+Esc still goes back and Ctrl+Alt+Shift+Up still
--- notches. Binding the value twice is the whole cost.
+-- gesture is therefore bound twice, to the same handler value:
+-- Alt+Shift+Esc still goes back, Ctrl+Alt+Shift+Up still notches,
+-- Alt+Shift+P still pauses. Binding it twice is the whole cost,
+-- and every gesture above pays it.
 local function register_reserved()
   local fn = compy.input.fn
   local sc = compy.input.shortcuts.keypressed
@@ -115,10 +118,12 @@ local function register_reserved()
   sc["ctrl+alt+shift+down"] = notch_down
   sc["alt+*"] = fn.stop_here(claimChord)
   sc["alt+shift+*"] = fn.stop_here(claimChord)
-  sc["alt+p"] = fn.stop_here(function(k, _, isr)
+  local pause = fn.stop_here(function(k, _, isr)
     claimChord(k)
     if not isr then pauseToggle() end
   end)
+  sc["alt+p"] = pause
+  sc["alt+shift+p"] = pause
   local rearm = fn.ignore_repeat(hintReenable)
   sc["ctrl+alt+h"] = fn.stop_here(function(k, sk, isr)
     claimChord(k)
