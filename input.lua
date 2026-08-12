@@ -8,9 +8,11 @@
 -- compy.input.shortcuts entries, which run ahead of the hooks.
 --
 -- Key repeat is filtered by the isrepeat flag the API delivers
--- as the third hook argument. Text input is enabled to match
--- the IDE default (restoring it on exit is a no-op). The game
--- does NOT disable global key-repeat: it now COULD restore it,
+-- as the third hook argument. setTextInput(true) below is for
+-- running as a plain LOVE program: the IDE makes the same call
+-- at boot, under its Android settings, so inside it the line is
+-- redundant and undoing it on exit would be a no-op.
+-- The game does NOT disable global key-repeat: it now COULD,
 -- since compy.before_exit fires on every stop path including
 -- Ctrl+Esc, but the repeats are filtered rather than suppressed
 -- and turning them off would change what the scenes see.
@@ -132,7 +134,6 @@ local function register_reserved()
 end
 
 function inputInit()
-  --> REMARK: what is it for? (setTextInput)
   love.keyboard.setTextInput(true)
   GLYPH_CLAIMED = { }
   compy.input.hooks.keypressed = appKeypressed
