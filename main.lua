@@ -86,10 +86,21 @@ inputInit()
 
 -- Suppress the system pointer: relative mode keeps it off the
 -- screen edges so the Android nav/status bars never reveal.
--- The keyboard uses no mouse; the runner restores it on exit.
+-- The keyboard uses no mouse.
+-- Relative mode is REAL device state -- the sandbox clones the
+-- love table but shares the C functions -- so it outlives the run
+-- and lands in the console the project exits to. Nothing in the
+-- runner puts it back; this comment used to claim it did. So the
+-- project restores what it found, on every stop path including
+-- Ctrl+Esc, but NOT on a raise, which is not a stop
+-- (doc/input_api.md, "Stop hook -- compy.before_exit").
 -- TODO(root-access): replace with trackpad disable on entry.
 
+POINTER_RELATIVE_WAS = love.mouse.getRelativeMode()
 love.mouse.setRelativeMode(true)
+compy.before_exit = function()
+  love.mouse.setRelativeMode(POINTER_RELATIVE_WAS)
+end
 if DEBUG then pcall(dbgBoot) end
 gotoScene("intro")
 
