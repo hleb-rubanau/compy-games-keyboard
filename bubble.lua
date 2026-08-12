@@ -144,7 +144,7 @@ function bubbleKeypressed(k)
   if k == gaugeCurrent(BUBBLE) then
     BUB.key = k
     BUB.t = 0
-  elseif not isMod(k) and k ~= "capslock" then
+  elseif not Key.is_mod(k) and k ~= "capslock" then
     fkWrong(BUBBLE, BUBBLE_CFG, k)
   end
 end

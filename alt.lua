@@ -202,7 +202,7 @@ function altPlayKey(k)
   if not altIsKeyTarget(gaugeCurrent(ALT)) then return end
   if k == gaugeCurrent(ALT) then
     altHit()
-  elseif not isMod(k) and k ~= "capslock" then
+  elseif not Key.is_mod(k) and k ~= "capslock" then
     altWrong()
   end
 end

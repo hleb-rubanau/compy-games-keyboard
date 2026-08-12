@@ -117,10 +117,6 @@ function inputInit()
   register_reserved()
 end
 
-function isMod(k)
-  return Key.is_mod(k)
-end
-
 function goBack()
   if isGameScene(ACTIVE) then
     gotoScene("menu")
