@@ -212,7 +212,7 @@ end
 -- the next level); any stray glyph there is dropped by
 -- altTextinput's fkDone guard anyway.
 function altKeypressed(k)
-  if k == "h" and INPUT.ctrl and INPUT.alt then
+  if k == "h" and Key.ctrl() and Key.alt() then
     altHintReenable()
     return
   end
@@ -239,7 +239,7 @@ end
 -- not then point at Shift.
 function altHintReady(item)
   if isAlphaChar(item) then return capsEffectiveUpper() end
-  return INPUT.shift
+  return Key.shift()
 end
 
 -- The hint's keyboard glows: while the base key is not yet
@@ -249,7 +249,7 @@ end
 -- ready with no Shift, so Shift is not lit then).
 function altHintDeco(deco)
   if altHintReady(gaugeCurrent(ALT)) then
-    if INPUT.shift then
+    if Key.shift() then
       deco.lshift = { bg = COL_WARM_DIM }
       deco.rshift = { bg = COL_WARM_DIM }
     end

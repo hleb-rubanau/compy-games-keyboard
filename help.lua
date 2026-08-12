@@ -15,7 +15,7 @@
 -- there for.
 function helpHeld()
   local h = love.keyboard.isDown("h")
-  return h and INPUT.alt and not INPUT.ctrl
+  return h and Key.alt() and not Key.ctrl()
 end
 
 -- True while the help overlay is on screen. main pauses the

@@ -40,26 +40,14 @@
 -- case where the modifier is released first and the trigger
 -- keeps repeating on its own.
 --
--- Held modifier state is asked of the keyboard through the
--- INPUT proxy below, which folds the l/r pairs via Key. It used
--- to be a mirror this file maintained on every press and
+-- Held modifier state is asked of the keyboard through Key,
+-- which folds each l/r pair the way a combo string does. It
+-- used to be a mirror this file maintained on every press and
 -- release, and then a read of a set the framework tracked; the
 -- framework tracks nothing now (Decision 30) and the device is
 -- the answer outside an event -- which is what the key-cap
--- renderer needs, since it reads INPUT.shift from draw, where
+-- renderer needs, since it reads that state from draw, where
 -- there is no event argument to consult.
-
-
--- Reads ask Key, which folds each l/r modifier pair the way a
--- combo string does (doc/input_api.md, "Held keys").
-INPUT = setmetatable({ }, {
-  __index = function(_, k)
-    ---> REMARK: WHY WOULD WE DO IT AND WHY USE custom 'INPUT' at all?
-    if k == "shift" then return Key.shift() end
-    if k == "ctrl" then return Key.ctrl() end
-    if k == "alt" then return Key.alt() end
-  end,
-})
 
 -- A chord's trigger key is claimed when the chord is taken, so a
 -- trigger still down after its modifier is released cannot type
@@ -130,9 +118,7 @@ function inputInit()
 end
 
 function isMod(k)
-  return k == "lshift" or k == "rshift"
-    or k == "lctrl" or k == "rctrl"
-    or k == "lalt" or k == "ralt"
+  return Key.is_mod(k)
 end
 
 function goBack()
@@ -234,12 +220,12 @@ end
 -- (only Shift modifies a target), so drop it too.
 function appTextinput(t)
   if PAUSED then return end
-  if INPUT.alt then return end
-  if INPUT.ctrl then return end
+  if Key.alt() then return end
+  if Key.ctrl() then return end
   if helpOverlayShown() then return end
-  dbgLog("TI " .. t .. " sh=" .. tostring(INPUT.shift))
+  dbgLog("TI " .. t .. " sh=" .. tostring(Key.shift()))
   if isAlphaChar(t) then
-    capsReconcile(t, INPUT.shift)
+    capsReconcile(t, Key.shift())
   end
   local s = SCENES[ACTIVE]
   if s and s.textinput then s.textinput(t) end
