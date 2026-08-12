@@ -69,9 +69,12 @@ end
 -- The CLAIM is outside it: an action fires once per press, a
 -- claim must stand for as long as the key is down.
 --
--- "alt+*" is the whole Alt class: every Alt chord is swallowed,
--- never reaching the scene as a typed target. Its only job is
--- the claim.
+-- "alt+*" is the Alt class and "alt+shift+*" the Alt+Shift one:
+-- every Alt chord without Ctrl is swallowed, never reaching the
+-- scene as a typed target. TWO classes are needed because a
+-- class is its modifier set exactly, where the hand-written test
+-- this replaced said only "Alt and not Ctrl" and so caught
+-- Alt+Shift+key too. Their only job is the claim.
 -- alt+p is an exact binding and exact wins over the class, so it
 -- claims for itself.
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
@@ -101,6 +104,7 @@ local function register_reserved()
   sc["ctrl+alt+down"] = notch_down
   sc["ctrl+alt+shift+down"] = notch_down
   sc["alt+*"] = fn.stop_here(claimChord)
+  sc["alt+shift+*"] = fn.stop_here(claimChord)
   sc["alt+p"] = fn.stop_here(function(k, _, isr)
     claimChord(k)
     if not isr then pauseToggle() end
@@ -223,6 +227,13 @@ end
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
+  -- A chord that is NOT swallowed still owns its trigger key: a
+  -- Ctrl chord reaches the scene by design, and if its modifier
+  -- is released while the trigger stays down the repeats produce
+  -- plain characters. The old held set suppressed those for
+  -- every chord, not just the swallowed ones, so the claim is
+  -- taken here too.
+  if Key.ctrl() or Key.alt() then claimChord(k) end
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
   if helpOverlayShown() then return end
