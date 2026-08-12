@@ -149,6 +149,17 @@ function bubbleKeypressed(k)
   end
 end
 
+-- The one judge in the game that keys on the release EVENT, and
+-- the only scene with a keyreleased handler at all. It stays
+-- that way on purpose: what it measures is how LONG a key was
+-- held -- a duration, and no device poll answers that.
+-- The caution that buys: a release lost to a focus change
+-- (alt-tab, an OS overlay) leaves BUB.key set with no release
+-- coming. bubbleGrow's own timeout pops the bubble a moment
+-- later, so the cost is a pop the child simply retries -- an
+-- inconvenience, not a wedge, which is why this was ruled not
+-- worth converting (doc/development/internals/examples/
+-- keyboard.md, "Consequences, accepted").
 function bubbleKeyreleased(k)
   if k ~= BUB.key then return end
   bubbleRelease()

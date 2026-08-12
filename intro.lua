@@ -55,6 +55,14 @@ function introUpdate(dt)
   end
 end
 
+-- Any key finishes the typewriter early -- a lone Shift too, as
+-- upstream had it. A lone Alt does not reach here: input.lua's
+-- appKeypressed filters it, because upstream's hand-written
+-- chord test swallowed a bare Alt press before any scene saw it,
+-- and a combo class cannot (a modifier's own press names no
+-- combo). The Shift/Alt asymmetry is the game's own; it was
+-- found this way and is deliberately left, rather than "fixed"
+-- into a second difference from the authored game.
 function introKeypressed(k)
   if INTRO.phase ~= "ready" then
     introFinish()
