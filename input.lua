@@ -17,28 +17,28 @@
 --
 -- Ordering: keypressed and textinput have NO fixed order
 -- between them (doc/development/internals/user_input.md, "Data
--- flow"). The IDE delivers the glyph first; desktop LOVE
--- delivers the keypress first. Nothing here may depend on
--- which, and two schemes are ruled out by that:
--- "a fresh keypress arms a gate, its textinput consumes it"
--- fails wherever the glyph arrives first, and "drop the glyph
--- if its key is HELD" fails wherever the keypress arrives
--- first, because then the key is already held at its own first
--- glyph and every fresh target is thrown away. The second is
--- what this file used to do, and it is what made the Alt-keys
--- scene deaf on the device while working in the IDE.
--- So a glyph is CLAIMED instead: one per press, released at
--- keyup (spendGlyph below). That question -- has this key's
--- glyph been judged since its last release -- has the same
--- answer in both orders.
--- An Alt+key chord is swallowed by the alt+* shortcut AND its
--- glyph dropped in appTextinput (a chord glyph CAN surface and
--- is never a target), so a chord cannot fumble a target. The
--- release boundary still leaks: a final key-repeat glyph can
--- arrive just after its keyup, so a key stays spent for a frame
--- after release (INPUT.upRecent, ours -- the keyboard reports
--- the key up the moment it is released, so nothing else marks
--- it recently spent).
+-- flow"), and nothing here may depend on which arrives first.
+-- Two schemes are ruled out by that: "a fresh keypress arms a
+-- gate, its textinput consumes it" fails wherever the glyph
+-- arrives first, and "drop the glyph if its key is HELD" fails
+-- wherever the keypress arrives first, because then the key is
+-- already held at its own first glyph and every fresh target is
+-- thrown away. The second is what this file used to do, and it
+-- is what made the Alt-keys scene deaf.
+-- So a glyph is CLAIMED instead: one per press. The claim asks
+-- a question with the same answer in both orders -- has a glyph
+-- for this key been taken since the key was last down -- and it
+-- is released by asking the KEYBOARD, once a frame (inputTick),
+-- rather than by any event. There is no grace window and no
+-- frame clock: the previous version kept a key spent for a
+-- frame after keyup to swallow a trailing repeat glyph, and paid
+-- for it by dropping a genuinely fast tap.
+-- An Alt+key chord is swallowed by the alt+* shortcut, which
+-- also claims the chord's trigger, AND its glyph is dropped in
+-- appTextinput (a chord glyph CAN surface and is never a
+-- target), so a chord cannot fumble a target -- including the
+-- case where the modifier is released first and the trigger
+-- keeps repeating on its own.
 --
 -- Held modifier state is asked of the keyboard through the
 -- INPUT proxy below, which folds the l/r pairs via Key. It used
@@ -51,9 +51,8 @@
 
 
 -- Reads ask Key, which folds each l/r modifier pair the way a
--- combo string does (doc/input_api.md, "Held keys"). Only
--- `upRecent` is ours.
-INPUT = setmetatable({ upRecent = { } }, {
+-- combo string does (doc/input_api.md, "Held keys").
+INPUT = setmetatable({ }, {
   __index = function(_, k)
     ---> REMARK: WHY WOULD WE DO IT AND WHY USE custom 'INPUT' at all?
     if k == "shift" then return Key.shift() end
@@ -62,9 +61,15 @@ INPUT = setmetatable({ upRecent = { } }, {
   end,
 })
 
--- A key stays "stale" this many frames after its release, to
--- swallow a final key-repeat glyph arriving just after keyup.
-INPUT_UP_GRACE = 1
+-- A chord's trigger key is claimed when the chord is taken, so a
+-- trigger still down after its modifier is released cannot type
+-- into the scene: Alt+H then letting go of Alt leaves H
+-- repeating, and those glyphs are not a typed answer. Claiming
+-- costs nothing on a repeat -- the claim is already held -- and
+-- it is released by the same poll as any other (inputTick).
+local function claimChord(k)
+  spendGlyph(k)
+end
 
 -- The app's reserved keys, none of which reaches the scene.
 --
@@ -73,11 +78,14 @@ INPUT_UP_GRACE = 1
 -- ignore_repeat goes inside it wherever there IS an action,
 -- because stop_here alone re-runs the action on every OS
 -- repeat: a held ctrl+alt+up would ramp the notch every frame.
+-- The CLAIM is outside it: an action fires once per press, a
+-- claim must stand for as long as the key is down.
 --
 -- "alt+*" is the whole Alt class: every Alt chord is swallowed,
--- never reaching the scene as a typed target. It is stop_here()
--- with nothing to run, so there is no repeat to ignore.
--- alt+p is an exact binding and exact wins over the class.
+-- never reaching the scene as a typed target. Its only job is
+-- the claim.
+-- alt+p is an exact binding and exact wins over the class, so it
+-- claims for itself.
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
 -- a different class -- which is the "and not Ctrl" test this
 -- file used to write out by hand before combo classes existed.
@@ -91,14 +99,16 @@ local function register_reserved()
   sc["ctrl+alt+down"] = fn.stop_here(fn.ignore_repeat(function()
     notchAdjust(-1)
   end))
-  sc["alt+*"] = fn.stop_here()
-  sc["alt+p"] = fn.stop_here(fn.ignore_repeat(pauseToggle))
+  sc["alt+*"] = fn.stop_here(claimChord)
+  sc["alt+p"] = fn.stop_here(function(k, _, isr)
+    claimChord(k)
+    if not isr then pauseToggle() end
+  end)
 end
 
 function inputInit()
   --> REMARK: what is it for? (setTextInput)
   love.keyboard.setTextInput(true)
-  INPUT.upRecent = { }
   GLYPH_CLAIMED = { }
   compy.input.hooks.keypressed = appKeypressed
   compy.input.hooks.keyreleased = appKeyreleased
@@ -134,22 +144,39 @@ end
 -- the environment, not the question.
 --
 -- Claiming answers the real one, the same way in both orders:
--- has a glyph for this key already been judged since its last
--- release. Claims are dropped on keyup (appKeyreleased), so the
--- next press starts clean.
+-- has a glyph for this key already been judged since the key was
+-- last down.
 GLYPH_CLAIMED = { }
 
 -- Claim this key's glyph for the current press. True means the
--- caller must DROP it: either a glyph was already claimed (a
--- key-repeat), or the key came up within INPUT_UP_GRACE frames
--- and this is a final repeat trailing just after keyup.
+-- caller must DROP it: a glyph for this key has already been
+-- taken and the key has not been up since.
 -- Keypresses do not use this: they have the real isrepeat flag.
 function spendGlyph(k)
   if GLYPH_CLAIMED[k] then return true end
-  local up = INPUT.upRecent[k]
-  if up and DBG_FRAME - up <= INPUT_UP_GRACE then return true end
   GLYPH_CLAIMED[k] = true
   return false
+end
+
+-- Claims are released by the DEVICE, once a frame, and by
+-- nothing else. keyreleased is not consulted, which is the point:
+-- a release and a trailing repeat glyph are the same shape on
+-- that channel, so clearing at the release lets the trailing
+-- glyph through as a fresh one -- a wrong answer nobody typed,
+-- which is what the frame-stamped grace window used to swallow.
+-- Asking the keyboard needs no window, no clock and no
+-- ordering: whether the key is down is a frame-time question
+-- about physical state, which is the rung this is for
+-- (doc/input_api.md, "Held keys"). Key.any_pressed(k) is the
+-- platform's form of this call and is what a Compy project
+-- should reach for; love.keyboard.isDown is kept here because
+-- this game asks it directly elsewhere too (helpHeld).
+function inputTick()
+  for k in pairs(GLYPH_CLAIMED) do
+    if not love.keyboard.isDown(k) then
+      GLYPH_CLAIMED[k] = nil
+    end
+  end
 end
 
 -- isr is the API's isrepeat (third hook argument): a held key
@@ -171,10 +198,11 @@ function appKeypressed(k, _, isr)
   if s and s.keypressed then s.keypressed(k) end
 end
 
+-- No judgement state here, by design: the claim is released by
+-- inputTick's poll, not by this event. The dispatch stays --
+-- bubble.lua judges its hold on this channel.
 function appKeyreleased(k)
   dbgLog("KR " .. k)
-  INPUT.upRecent[k] = DBG_FRAME
-  GLYPH_CLAIMED[k] = nil
   local s = SCENES[ACTIVE]
   if s and s.keyreleased then s.keyreleased(k) end
 end

@@ -224,12 +224,10 @@ end
 -- fixed order between them, so on a build that delivers the
 -- keypress first the key is already held at its own first
 -- glyph and every fresh target is thrown away. That inference
--- is what made the Alt scene deaf on the device. Claiming asks
--- the question that has one answer in both orders: has a glyph
--- for this key been judged since its last release.
---
--- The textinput heal rewrites both judges and subtracts
--- spendGlyph; this call moves with it rather than surviving it.
+-- is what made the Alt scene deaf. Claiming asks the question
+-- that has one answer in both orders: has a glyph for this key
+-- been taken since the key was last down -- and the keyboard,
+-- not an event, is what answers the second half (inputTick).
 function wordsTextinput(ch)
   if spendGlyph(wordsBaseKey(ch)) then return end
   if wordsDone() then return end

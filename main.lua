@@ -117,14 +117,20 @@ function updateStep(dt)
   sceneUpdate(dt)
 end
 
+-- inputTick releases glyph claims whose key the keyboard reports
+-- up. It runs HERE and not in updateStep, which returns early
+-- before the first draw, while paused, and while the help
+-- overlay is held -- and the overlay is held Alt+H, so a claim
+-- would outlive its key in ordinary use, not in a corner case.
 function love.update(dt)
   DBG_FRAME = DBG_FRAME + 1
-  if not DEBUG then 
-    return updateStep(dt) 
+  inputTick()
+  if not DEBUG then
+    return updateStep(dt)
   end
   local ok, err = pcall(updateStep, dt)
-  if not ok 
-  then dbgLogErr("UPDATE", err) 
+  if not ok
+  then dbgLogErr("UPDATE", err)
   end
 end
 
