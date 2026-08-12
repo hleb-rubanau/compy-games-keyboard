@@ -87,13 +87,12 @@ inputInit()
 -- Suppress the system pointer: relative mode keeps it off the
 -- screen edges so the Android nav/status bars never reveal.
 -- The keyboard uses no mouse.
--- Relative mode is REAL device state -- the sandbox clones the
--- love table but shares the C functions -- so it outlives the run
--- and lands in the console the project exits to. Nothing in the
--- runner puts it back; this comment used to claim it did. So the
--- project restores what it found, on every stop path including
--- Ctrl+Esc, but NOT on a raise, which is not a stop
--- (doc/input_api.md, "Stop hook -- compy.before_exit").
+-- Relative mode is REAL device state: it outlives the run and
+-- lands in whatever the project exits to, and the runner does
+-- not put it back, so this restores what it found.
+-- compy.before_exit fires on every stop path including Ctrl+Esc
+-- but NOT on a raise -- so a run that ends by raising leaves
+-- the mode on, and the next run restores that faithfully.
 -- TODO(root-access): replace with trackpad disable on entry.
 
 POINTER_RELATIVE_WAS = love.mouse.getRelativeMode()
@@ -128,11 +127,11 @@ function updateStep(dt)
   sceneUpdate(dt)
 end
 
--- inputTick releases glyph claims whose key the keyboard reports
--- up. It runs HERE and not in updateStep, which returns early
--- before the first draw, while paused, and while the help
--- overlay is held -- and the overlay is held Alt+H, so a claim
--- would outlive its key in ordinary use, not in a corner case.
+-- inputTick releases claims whose key the keyboard reports up.
+-- It runs HERE, not in updateStep, which returns early before
+-- the first draw, while paused, and while the help overlay is
+-- held -- and that overlay is a HELD Alt+H, so a claim would
+-- outlive its key in ordinary use.
 function love.update(dt)
   DBG_FRAME = DBG_FRAME + 1
   inputTick()

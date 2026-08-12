@@ -1,107 +1,59 @@
 -- Input lifecycle and event model.
 --
--- This game runs on the Compy input API (doc/input_api.md). It
--- registers compy.input.hooks.* rather than love.* handlers --
--- the framework would capture love.* and run them as hooks
--- anyway, so the explicit form just says what is happening --
--- and its reserved chords and the whole Alt class are
+-- The game registers compy.input.hooks.* instead of love.*
+-- handlers, and its reserved chords and the Alt class are
 -- compy.input.shortcuts entries, which run ahead of the hooks.
 --
--- Key repeat is filtered by the isrepeat flag the API delivers
--- as the third hook argument. setTextInput(true) below is for
+-- OS key repeat is filtered by the isrepeat flag the hooks get
+-- as their third argument. setTextInput(true) below is for
 -- running as a plain LOVE program: the IDE makes the same call
 -- at boot, under its Android settings, so inside it the line is
--- redundant and undoing it on exit would be a no-op.
--- The game does NOT disable global key-repeat: it now COULD,
--- since compy.before_exit fires on every stop path including
--- Ctrl+Esc, but the repeats are filtered rather than suppressed
--- and turning them off would change what the scenes see.
+-- redundant and undoing it on exit is a no-op. Global key
+-- repeat is left ON -- the repeats are filtered rather than
+-- suppressed, and stopping them would change what scenes see.
 --
--- Ordering: keypressed and textinput have NO fixed order
--- between them (doc/development/internals/user_input.md, "Data
--- flow"), and nothing here may depend on which arrives first.
--- Two schemes are ruled out by that: "a fresh keypress arms a
--- gate, its textinput consumes it" fails wherever the glyph
--- arrives first, and "drop the glyph if its key is HELD" fails
--- wherever the keypress arrives first, because then the key is
--- already held at its own first glyph and every fresh target is
--- thrown away. The second is what this file used to do, and it
--- is what made the Alt-keys scene deaf.
--- So a glyph is CLAIMED instead: one per press. The claim asks
--- a question with the same answer in both orders -- has a glyph
--- for this key been taken since the key was last down -- and it
--- is released by asking the KEYBOARD, once a frame (inputTick),
--- rather than by any event. There is no grace window and no
--- frame clock: the previous version kept a key spent for a
--- frame after keyup to swallow a trailing repeat glyph, and paid
--- for it by dropping a genuinely fast tap.
--- An Alt+key chord is swallowed by the alt+* shortcut, which
--- also claims the chord's trigger, AND its glyph is dropped in
--- appTextinput (a chord glyph CAN surface and is never a
--- target), so a chord cannot fumble a target -- including the
--- case where the modifier is released first and the trigger
--- keeps repeating on its own.
+-- keypressed and textinput have NO guaranteed order between
+-- them, and nothing here may depend on which arrives first.
+-- So acceptance never asks whether the producing key is held:
+-- at the first character of a press that answer differs by
+-- build. A character is CLAIMED instead, one per press -- has a
+-- character for this key been taken since the key was last down
+-- -- and the claim is released by asking the KEYBOARD once a
+-- frame (inputTick), never by an event. No grace window, no
+-- frame clock.
 --
--- Held modifier state is asked of the keyboard through Key,
--- which folds each l/r pair the way a combo string does. It
--- used to be a mirror this file maintained on every press and
--- release, and then a read of a set the framework tracked; the
--- framework tracks nothing now (Decision 30) and the device is
--- the answer outside an event -- which is what the key-cap
--- renderer needs, since it reads that state from draw, where
--- there is no event argument to consult.
+-- Modifier state is asked of the keyboard through Key, which
+-- folds each l/r pair the way a combo string does; the key-cap
+-- renderer needs it from draw, where there is no event to
+-- consult.
 
--- A chord's trigger key is claimed when the chord is taken, so a
--- trigger still down after its modifier is released cannot type
--- into the scene: Alt+H then letting go of Alt leaves H
--- repeating, and those glyphs are not a typed answer. Claiming
--- costs nothing on a repeat -- the claim is already held -- and
--- it is released by the same poll as any other (inputTick).
+-- A chord's trigger is claimed when the chord is taken: Alt+H,
+-- then letting go of Alt, leaves H repeating, and those
+-- characters are not a typed answer. Claiming twice is free.
 local function claimChord(k)
   spendGlyph(k)
 end
 
--- The app's reserved keys, none of which reaches the scene.
+-- The app's reserved keys, none of which reaches a scene.
 --
--- stop_here is what says a combo is taken, so the action itself
--- does not have to know what happens after it returns.
--- ignore_repeat goes inside it wherever there IS an action,
--- because stop_here alone re-runs the action on every OS
--- repeat: a held ctrl+alt+up would ramp the notch every frame.
--- The CLAIM is outside it: an action fires once per press, a
--- claim must stand for as long as the key is down.
+-- stop_here says the combo is taken. ignore_repeat goes inside
+-- it wherever there is an action, since stop_here alone re-runs
+-- that action on every OS repeat: a held ctrl+alt+up would ramp
+-- the notch every frame. A claim goes OUTSIDE it -- an action
+-- fires once per press, a claim stands while the key is down.
 --
--- "alt+*" is the Alt class and "alt+shift+*" the Alt+Shift one:
--- every Alt chord without Ctrl is swallowed, never reaching the
--- scene as a typed target. TWO classes are needed because a
--- class is its modifier set exactly, where the hand-written test
--- this replaced said only "Alt and not Ctrl" and so caught
--- Alt+Shift+key too. Their only job is the claim.
--- alt+p and alt+shift+p are exact bindings, and exact wins over
--- the class, so they pause and claim for themselves. Both are
--- needed for the same reason Alt+Shift+Esc is: the test they
--- replaced accepted Shift.
--- Ctrl+Alt+H is NOT in the class -- a different modifier set is
--- a different class -- which is the "and not Ctrl" test this
--- file used to write out by hand before combo classes existed.
--- It is bound in its own right and reaches the active scene
--- through the onHint entry, the way ctrl+alt+up reaches onNotch;
--- alt.lua used to match its three keys in scene keypressed.
--- ignore_repeat is what that match got for free from the hook's
--- isrepeat filter: a shortcut sees every repeat, and re-arming
--- the hint on each one is a rule the game never had. And a
--- shortcut is swallowed in EVERY scene, where the hand match
--- left a bare "h" to knock in the key-target games (press, find,
--- bubble) -- incidental, and the other reserved chords are
--- swallowed the same way.
---
--- A combo is its modifier set EXACTLY, where the hand-written
--- tests these replaced were one-sided: "shift and not ctrl" also
--- accepted Alt, and "ctrl and alt" also accepted Shift. Each
--- gesture is therefore bound twice, to the same handler value:
--- Alt+Shift+Esc still goes back, Ctrl+Alt+Shift+Up still notches,
--- Alt+Shift+P still pauses. Binding it twice is the whole cost,
--- and every gesture above pays it.
+-- A combo is its modifier set EXACTLY, so a gesture that also
+-- tolerates Shift is bound twice, to the same handler value.
+-- "alt+*" and "alt+shift+*" are the swallowing classes: every
+-- Alt chord without Ctrl is taken, never reaching a scene as a
+-- typed target, and their only job is the claim. An exact
+-- binding wins over a class, so alt+p / alt+shift+p pause and
+-- claim for themselves.
+-- Ctrl+Alt+H is a different modifier set, so a different class.
+-- It re-arms the active scene's hint through the onHint
+-- descriptor entry, the way ctrl+alt+up reaches onNotch. Being
+-- a shortcut it is taken in EVERY scene, including the ones
+-- that judge key targets.
 local function register_reserved()
   local fn = compy.input.fn
   local sc = compy.input.shortcuts.keypressed
@@ -154,37 +106,23 @@ function notchAdjust(delta)
 end
 
 -- The teacher's hint chord, dispatched like the notch: a scene
--- that teaches something answers onHint, and only alt.lua does.
--- Unlike the notch it stops while paused, because that is where
--- it was handled before -- inside the scene's keypressed, below
--- appKeypressed's PAUSED gate -- and re-arming behind the pause
--- screen would blip the hint sound at nobody.
+-- that teaches answers onHint, and only alt.lua does. It stays
+-- inert behind the pause screen, where the notch does not.
 function hintReenable()
   if PAUSED then return end
   local s = SCENES[ACTIVE]
   if s and s.onHint then s.onHint() end
 end
 
--- One glyph per key press reaches a scene. textinput carries no
--- isrepeat flag of its own, so a repeat has to be recognised
--- some other way, and the held set cannot do it: whether
--- keypressed or textinput arrives first is not fixed
--- (doc/development/internals/user_input.md, "Data flow" -- no
--- ordering guarantee between the two channels), so at a FRESH
--- glyph the producing key is already held on one build and not
--- yet held on another. Asking "is it held" therefore answers
--- the environment, not the question.
---
--- Claiming answers the real one, the same way in both orders:
--- has a glyph for this key already been judged since the key was
--- last down.
+-- One character per key press reaches a scene. textinput
+-- carries no isrepeat of its own, and this is what recognises a
+-- repeat without asking whether the key is held.
 GLYPH_CLAIMED = { }
 
 -- The key a produced character came from: space, a shifted
--- symbol through SHIFT_MAP inverted, a letter its lowercase key,
--- else itself. Both textinput scenes need it and it lives here
--- because scene files are lazy-loaded -- config.lua, which holds
--- SHIFT_MAP, is loaded long before this one.
+-- symbol through SHIFT_MAP inverted, a letter its lowercase
+-- key, else itself. It lives here because scene files are
+-- lazy-loaded and config.lua's SHIFT_MAP is not.
 GLYPH_BASE = { }
 for base, sym in pairs(SHIFT_MAP) do
   GLYPH_BASE[sym] = base
@@ -198,14 +136,13 @@ function glyphBaseKey(ch)
 end
 
 -- love.keyboard.isDown RAISES on a string that is not one of
--- LOVE's key constants -- "Invalid key constant: ~" -- and a
--- produced character is not always the name of a key: an IME or
+-- LOVE's key constants ("Invalid key constant: ~"), and a
+-- produced character is not always a key name -- an IME or
 -- dead-key composition can map to nothing this keyboard has.
--- A claim that cannot be polled cannot be released, so it is
--- never taken: that character is accepted, and holding one would
--- repeat it. No scene targets such a character, and the
--- alternative is a per-frame loop that can raise. Asked once per
--- key name and remembered, since the answer cannot change.
+-- A claim that cannot be polled can never be released, so it is
+-- never taken: such a character is accepted, and holding one
+-- would repeat it. No scene targets one. Asked once per name,
+-- since the answer cannot change.
 local POLLABLE = { }
 local function pollable(k)
   local known = POLLABLE[k]
@@ -228,18 +165,13 @@ function spendGlyph(k)
 end
 
 -- Claims are released by the DEVICE, once a frame, and by
--- nothing else. keyreleased is not consulted, which is the point:
--- a release and a trailing repeat glyph are the same shape on
--- that channel, so clearing at the release lets the trailing
--- glyph through as a fresh one -- a wrong answer nobody typed,
--- which is what the frame-stamped grace window used to swallow.
--- Asking the keyboard needs no window, no clock and no
--- ordering: whether the key is down is a frame-time question
--- about physical state, which is the rung this is for
--- (doc/input_api.md, "Held keys"). Key.any_pressed(k) is the
--- platform's form of this call and is what a Compy project
--- should reach for; love.keyboard.isDown is kept here because
--- this game asks it directly elsewhere too (helpHeld).
+-- nothing else. keyreleased is not consulted: a release and a
+-- trailing repeat character are the same shape on that channel,
+-- so clearing at the release would let that character through
+-- as a fresh one nobody typed. Asking the keyboard needs no
+-- window, no clock and no ordering.
+-- Key.any_pressed(k) is the IDE's form of this call; the plain
+-- LOVE one is kept so this file also runs standalone.
 function inputTick()
   for k in pairs(GLYPH_CLAIMED) do
     if not love.keyboard.isDown(k) then
@@ -248,56 +180,44 @@ function inputTick()
   end
 end
 
--- isr is the API's isrepeat (third hook argument): a held key
--- is filtered at the source instead of inferred from held
--- state. capslock's exemption is INHERITED from upstream and
--- kept deliberately, not reasoned from here: there it was
--- exempt from a held-set staleness test that a missing release
--- would wedge, freezing the Caps estimate for the session.
--- Under isrepeat nothing can eat a toggle -- a fresh press is
--- never flagged as a repeat -- so the exemption's only effect
--- now is that capslock REPEATS reach capsToggle (see the Caps
--- Lock section of doc/development/internals/examples/keyboard.md).
--- Scene input is also dropped while the help overlay is up (the
--- game is frozen behind it).
+-- isr is the hook's isrepeat: a held key is filtered at the
+-- source. capslock keeps the exemption it has upstream; under
+-- isrepeat nothing can eat a toggle, so its only effect now is
+-- that capslock repeats reach capsToggle.
+-- Scene input is dropped while the help overlay is up (the game
+-- is frozen behind it).
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
-  -- A chord that is NOT swallowed still owns its trigger key: a
-  -- Ctrl chord reaches the scene by design, and if its modifier
-  -- is released while the trigger stays down the repeats produce
-  -- plain characters. The old held set suppressed those for
-  -- every chord, not just the swallowed ones, so the claim is
-  -- taken here too.
+  -- A chord that is NOT swallowed still owns its trigger: it
+  -- reaches the scene by design, and if its modifier goes up
+  -- while the trigger stays down the repeats produce plain
+  -- characters.
   if Key.ctrl() or Key.alt() then claimChord(k) end
   if k == "capslock" then capsToggle() end
   if PAUSED then return end
   if helpOverlayShown() then return end
-  -- A bare Alt press reaches here where it used to be swallowed:
-  -- the hand-written chord test caught it (Alt was held, and the
-  -- key WAS Alt), while "alt+*" cannot -- a modifier's own press
-  -- names no combo. Scenes ignore modifiers, but the intro
-  -- finishes its typewriter on any key, so without this Alt alone
-  -- would skip it. Lone Shift does skip it, here as upstream:
-  -- that asymmetry is the game's, and is left alone.
+  -- A modifier's own press names no combo, so "alt+*" cannot
+  -- take a bare Alt press. Scenes ignore modifiers, but the
+  -- intro finishes its typewriter on any key -- intro.lua has
+  -- the asymmetry this leaves.
   if Key.is_alt(k) then return end
   local s = SCENES[ACTIVE]
   if s and s.keypressed then s.keypressed(k) end
 end
 
--- No judgement state here, by design: the claim is released by
--- inputTick's poll, not by this event. The dispatch stays --
--- bubble.lua judges its hold on this channel.
+-- No judgement state here: claims are released by inputTick's
+-- poll. The dispatch stays -- bubble.lua judges its hold on
+-- this channel.
 function appKeyreleased(k)
   dbgLog("KR " .. k)
   local s = SCENES[ACTIVE]
   if s and s.keyreleased then s.keyreleased(k) end
 end
 
--- textinput is judged by the scene (the per-glyph stale filter
--- lives there); dropped here while paused or behind help. A
--- glyph made with Alt or Ctrl held is a chord, never a target
--- (only Shift modifies a target), so drop it too.
+-- Judged by the scene, and dropped here while paused or behind
+-- help. A character made with Alt or Ctrl held belongs to a
+-- chord and is never a target -- only Shift modifies one.
 function appTextinput(t)
   if PAUSED then return end
   if Key.alt() then return end

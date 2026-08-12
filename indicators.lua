@@ -19,10 +19,10 @@ function isUpperChar(t)
 end
 
 -- Reconcile from one produced letter and the Shift state its
--- caller read at the moment textinput fired. That state used to
--- be edge-tracked; it is now asked of the keyboard, so a Shift
--- released inside the same event batch can be seen as already up
--- (the cost Decision 30 names and accepts).
+-- caller read when textinput fired. That state is asked of the
+-- keyboard, so a Shift released inside the same event batch can
+-- read as already up -- accepted, since the next letter fixes
+-- the estimate.
 function capsReconcile(letter, shift_held)
   local up = isUpperChar(letter)
   CAPS_STATE.on = (up ~= shift_held)

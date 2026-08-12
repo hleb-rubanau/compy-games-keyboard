@@ -9,8 +9,7 @@
 -- constant. A wrong input knocks (once per target). Same
 -- press-count gauge, level-up screen, pastel, and exit hint as
 -- Press/Find (findkey.lua); folds the Caps/Shift games. The
--- first
--- few Shift-requiring targets show an inline Shift hint
+-- first few Shift-requiring targets show an inline Shift hint
 -- (hints.lua); Ctrl+Alt+H re-arms it.
 
 -- Append a glyph group's targets to a round's master set.
@@ -108,11 +107,9 @@ end
 
 -- Teacher chord (Ctrl+Alt+H): re-arm the hint budget for the
 -- next few shifted characters, restart the finger sweep, and
--- play a soft blip. Reached through this scene's onHint entry,
--- since the chord is a shortcut and never becomes scene input.
--- Its 'h' cannot trail into play either: the shortcut claims the
--- trigger key, and a chord glyph is dropped by appTextinput's
--- Alt/Ctrl guard.
+-- play a soft blip. Reached through this scene's onHint entry:
+-- the chord is a shortcut, so it never becomes scene input, and
+-- its 'h' cannot trail in either -- the shortcut claims it.
 function altHintReenable()
   ALT.hint = ALT_HINT_MORE
   ALT.htime = 0
@@ -169,12 +166,10 @@ end
 -- glyph, however made. Non-printing targets ignore textinput
 -- (keypressed judges them).
 --
--- spendGlyph claims one glyph per press and drops the repeats,
--- until the keyboard reports the key up. That stops a held wrong
--- key knocking each frame, a held right key bleeding a miss onto
--- the next target, and a chord key's trailing glyph (e.g. after
--- Alt+H, whose shortcut claims the trigger) fumbling the live
--- target.
+-- spendGlyph takes one glyph per press and drops the repeats
+-- until the keyboard reports the key up: a held wrong key
+-- knocks once, a held right key does not bleed a miss onto the
+-- next target, and a chord's trailing glyph cannot fumble one.
 function altTextinput(ch)
   if spendGlyph(altBaseKey(ch)) then return end
   if fkDone(ALT) then return end
