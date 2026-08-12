@@ -1,16 +1,18 @@
 -- Input lifecycle and event model.
 --
 -- The game registers compy.input.hooks.* instead of love.*
--- handlers, and its reserved chords and the Alt class are
--- compy.input.shortcuts entries, which run ahead of the hooks.
+-- handlers -- the framework captures love.* into the same
+-- hooks, so this only says it out loud -- and its reserved
+-- chords and the Alt class are compy.input.shortcuts entries,
+-- which run ahead of the hooks.
 --
 -- OS key repeat is filtered by the isrepeat flag the hooks get
 -- as their third argument. setTextInput(true) below is for the
--- device: the IDE makes the same call at its own boot, under
--- its Android settings, so here it is redundant and undoing it
--- on exit would be a no-op. Global key
--- repeat is left ON -- the repeats are filtered rather than
--- suppressed, and stopping them would change what scenes see.
+-- device build: the IDE makes the same call at its own boot, so
+-- this line matters there and is harmless here (undoing it on
+-- exit would be a no-op). Global key repeat is left ON -- the
+-- repeats are filtered rather than suppressed, and stopping
+-- them would change what scenes see.
 --
 -- keypressed and textinput have NO guaranteed order between
 -- them, and nothing here may depend on which arrives first.

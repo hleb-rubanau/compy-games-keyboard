@@ -142,8 +142,8 @@ function wordsExpected()
 end
 
 -- The physical key a target glyph is produced on: space for a
--- space, the lowercase key for a letter (incl. a capital), else
--- the glyph itself (an unshifted punctuation key).
+-- space, a letter's lowercase key, a shifted symbol's unshifted
+-- key, else the glyph itself.
 function wordsBaseKey(ch)
   return glyphBaseKey(ch)
 end

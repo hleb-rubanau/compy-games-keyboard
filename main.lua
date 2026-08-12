@@ -172,9 +172,3 @@ function love.draw()
   gfx.pop()
   DREW_ONCE = true
 end
-
--- Keyboard/text handlers are registered as compy.input.hooks in
--- inputInit (input.lua), not as love.* globals: the framework
--- captures love.* into the same hooks, so the explicit form
--- only drops three wrappers that existed to satisfy LOVE's
--- naming convention.

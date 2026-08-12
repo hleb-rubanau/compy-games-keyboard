@@ -149,11 +149,8 @@ function bubbleKeypressed(k)
   end
 end
 
--- The one judge in the game that keys on the release EVENT. A
--- frame poll could measure the hold as well -- accumulate while
--- the device still reports the key down -- so this is not
--- something the platform cannot serve; the channel is the
--- author's choice.
+-- The one judge in the game that keys on the release EVENT --
+-- a chosen channel, not a platform limit.
 -- The caution: a release lost to a focus change leaves BUB.key
 -- set with no release coming. bubbleGrow's timeout pops the
 -- bubble a moment later: the cost is a pop the child retries.
