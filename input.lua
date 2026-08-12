@@ -80,6 +80,16 @@ end
 -- Ctrl+Alt+H is NOT in the class -- a different modifier set is
 -- a different class -- which is the "and not Ctrl" test this
 -- file used to write out by hand before combo classes existed.
+-- It is bound in its own right and reaches the active scene
+-- through the onHint entry, the way ctrl+alt+up reaches onNotch;
+-- alt.lua used to match its three keys in scene keypressed.
+-- ignore_repeat is what that match got for free from the hook's
+-- isrepeat filter: a shortcut sees every repeat, and re-arming
+-- the hint on each one is a rule the game never had. And a
+-- shortcut is swallowed in EVERY scene, where the hand match
+-- left a bare "h" to knock in the key-target games (press, find,
+-- bubble) -- incidental, and the other reserved chords are
+-- swallowed the same way.
 --
 -- A combo is its modifier set EXACTLY, where the hand-written
 -- tests these replaced were one-sided: "shift and not ctrl" also
@@ -109,6 +119,11 @@ local function register_reserved()
     claimChord(k)
     if not isr then pauseToggle() end
   end)
+  local rearm = fn.ignore_repeat(hintReenable)
+  sc["ctrl+alt+h"] = fn.stop_here(function(k, sk, isr)
+    claimChord(k)
+    rearm(k, sk, isr)
+  end)
 end
 
 function inputInit()
@@ -130,6 +145,18 @@ end
 function notchAdjust(delta)
   local s = SCENES[ACTIVE]
   if s and s.onNotch then s.onNotch(delta) end
+end
+
+-- The teacher's hint chord, dispatched like the notch: a scene
+-- that teaches something answers onHint, and only alt.lua does.
+-- Unlike the notch it stops while paused, because that is where
+-- it was handled before -- inside the scene's keypressed, below
+-- appKeypressed's PAUSED gate -- and re-arming behind the pause
+-- screen would blip the hint sound at nobody.
+function hintReenable()
+  if PAUSED then return end
+  local s = SCENES[ACTIVE]
+  if s and s.onHint then s.onHint() end
 end
 
 -- One glyph per key press reaches a scene. textinput carries no

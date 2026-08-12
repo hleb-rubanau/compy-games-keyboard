@@ -108,8 +108,11 @@ end
 
 -- Teacher chord (Ctrl+Alt+H): re-arm the hint budget for the
 -- next few shifted characters, restart the finger sweep, and
--- play a soft blip. Any chord glyph is dropped by the Alt/Ctrl
--- guard in appTextinput, so nothing trails into play.
+-- play a soft blip. Reached through this scene's onHint entry,
+-- since the chord is a shortcut and never becomes scene input.
+-- Its 'h' cannot trail into play either: the shortcut claims the
+-- trigger key, and a chord glyph is dropped by appTextinput's
+-- Alt/Ctrl guard.
 function altHintReenable()
   ALT.hint = ALT_HINT_MORE
   ALT.htime = 0
@@ -198,15 +201,13 @@ function altPlayKey(k)
   end
 end
 
--- Ctrl+Alt+H re-arms the hint. On the level-up screen only Tab
--- is handled (no printable replay key, so nothing trails into
--- the next level); any stray glyph there is dropped by
--- altTextinput's fkDone guard anyway.
+-- On the level-up screen only Tab is handled (no printable
+-- replay key, so nothing trails into the next level); any stray
+-- glyph there is dropped by altTextinput's fkDone guard anyway.
+-- Ctrl+Alt+H is not matched here any more: it is a shortcut
+-- (input.lua) that calls onHint below, so this scene sees no
+-- chord at all.
 function altKeypressed(k)
-  if k == "h" and Key.ctrl() and Key.alt() then
-    altHintReenable()
-    return
-  end
   if fkDone(ALT) then
     fkDoneKey(ALT, ALT_CFG, k)
     return
@@ -301,5 +302,6 @@ registerScene("alt", {
   keypressed = altKeypressed,
   textinput = altTextinput,
   onNotch = altOnNotch,
+  onHint = altHintReenable,
   noHint = altDone
 })
