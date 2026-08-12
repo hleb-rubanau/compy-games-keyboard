@@ -143,12 +143,49 @@ end
 -- last down.
 GLYPH_CLAIMED = { }
 
+-- The key a produced character came from: space, a shifted
+-- symbol through SHIFT_MAP inverted, a letter its lowercase key,
+-- else itself. Both textinput scenes need it and it lives here
+-- because scene files are lazy-loaded -- config.lua, which holds
+-- SHIFT_MAP, is loaded long before this one.
+GLYPH_BASE = { }
+for base, sym in pairs(SHIFT_MAP) do
+  GLYPH_BASE[sym] = base
+end
+
+function glyphBaseKey(ch)
+  if ch == " " then return "space" end
+  if GLYPH_BASE[ch] then return GLYPH_BASE[ch] end
+  if isAlphaChar(ch) then return string.lower(ch) end
+  return ch
+end
+
+-- love.keyboard.isDown RAISES on a string that is not one of
+-- LOVE's key constants -- "Invalid key constant: ~" -- and a
+-- produced character is not always the name of a key: an IME or
+-- dead-key composition can map to nothing this keyboard has.
+-- A claim that cannot be polled cannot be released, so it is
+-- never taken: that character is accepted, and holding one would
+-- repeat it. No scene targets such a character, and the
+-- alternative is a per-frame loop that can raise. Asked once per
+-- key name and remembered, since the answer cannot change.
+local POLLABLE = { }
+local function pollable(k)
+  local known = POLLABLE[k]
+  if known == nil then
+    known = pcall(love.keyboard.isDown, k)
+    POLLABLE[k] = known
+  end
+  return known
+end
+
 -- Claim this key's glyph for the current press. True means the
 -- caller must DROP it: a glyph for this key has already been
 -- taken and the key has not been up since.
 -- Keypresses do not use this: they have the real isrepeat flag.
 function spendGlyph(k)
   if GLYPH_CLAIMED[k] then return true end
+  if not pollable(k) then return false end
   GLYPH_CLAIMED[k] = true
   return false
 end

@@ -43,12 +43,6 @@ ALT_KEYTARGET = {
   backspace = true, tab = true, ["return"] = true
 }
 
--- Reverse SHIFT_MAP: a symbol target's base key (the burst).
-ALT_BASE = { }
-for base, sym in pairs(SHIFT_MAP) do
-  ALT_BASE[sym] = base
-end
-
 function altIsKeyTarget(item)
   return ALT_KEYTARGET[item] == true
 end
@@ -58,7 +52,7 @@ end
 -- digits, unshifted punctuation, space, and the non-printing
 -- keys do not.
 function altNeedsShift(item)
-  return isUpperChar(item) or ALT_BASE[item] ~= nil
+  return isUpperChar(item) or GLYPH_BASE[item] ~= nil
 end
 
 -- The physical key a target is produced on, for the success
@@ -67,10 +61,7 @@ end
 -- a letter or digit itself.
 function altBaseKey(item)
   if altIsKeyTarget(item) then return item end
-  if item == " " then return "space" end
-  if ALT_BASE[item] then return ALT_BASE[item] end
-  if isAlphaChar(item) then return string.lower(item) end
-  return item
+  return glyphBaseKey(item)
 end
 
 -- The top-band keycap label for a target: a friendly name for

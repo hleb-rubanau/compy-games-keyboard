@@ -145,9 +145,7 @@ end
 -- space, the lowercase key for a letter (incl. a capital), else
 -- the glyph itself (an unshifted punctuation key).
 function wordsBaseKey(ch)
-  if ch == " " then return "space" end
-  if isAlphaChar(ch) then return string.lower(ch) end
-  return ch
+  return glyphBaseKey(ch)
 end
 
 -- The gauge filled: celebrate and show the level-up screen.
