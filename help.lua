@@ -8,8 +8,9 @@
 -- (its own completion screen) via noHint() -> true.
 
 -- Alt+H is a chord that is HELD, not one that fires, so it is
--- asked rather than bound: the overlay is up for exactly as
--- long as the keys are, and it cannot wedge on a lost release.
+-- asked rather than bound: the help widget (this repo calls it
+-- the overlay) is shown for exactly as long as the keys are,
+-- and it cannot wedge on a lost release.
 function helpHeld()
   local h = Key.any_pressed("h")
   return h and Key.alt() and not Key.ctrl()

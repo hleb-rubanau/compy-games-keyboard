@@ -186,8 +186,8 @@ end
 -- source. capslock keeps the exemption it has upstream; under
 -- isrepeat nothing can eat a toggle, so its only effect now is
 -- that capslock repeats reach capsToggle.
--- Scene input is dropped while the help overlay is up (the game
--- is frozen behind it).
+-- Scene input is dropped while the help widget (this repo's
+-- overlay) is shown -- the game is frozen behind it.
 function appKeypressed(k, _, isr)
   if isr and k ~= "capslock" then return end
   dbgLog("KP " .. k)
